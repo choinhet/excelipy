@@ -17,6 +17,15 @@ def write_text(
     origin: Tuple[int, int] = (0, 0),
 ) -> Tuple[int, int]:
     log.debug(f"Writing text at {origin}")
+
+    worksheet.merge_range(
+        origin[1],
+        origin[0],
+        origin[1] + component.height - 1,
+        origin[0] + component.width - 1,
+        "",
+    )
+
     worksheet.write(
         origin[1],
         origin[0],
@@ -29,4 +38,4 @@ def write_text(
             ],
         ),
     )
-    return 1, 1
+    return component.width, component.height

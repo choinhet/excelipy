@@ -37,6 +37,18 @@ class Style(BaseModel):
         self_dict.update(other_dict)
         return self.model_validate(self_dict)
 
+    def pl(self) -> int:
+        return self.padding_left or self.padding or 0
+
+    def pt(self) -> int:
+        return self.padding_top or self.padding or 0
+
+    def pr(self) -> int:
+        return self.padding_right or self.padding or 0
+
+    def pb(self) -> int:
+        return self.padding_bottom or self.padding or 0
+
 
 class Component(BaseModel):
     style: Style = Field(default_factory=Style)
@@ -47,6 +59,8 @@ class Component(BaseModel):
 
 class Text(Component):
     text: str
+    width: int = Field(default=1)
+    height: int = Field(default=1)
 
 
 class Fill(Component):
@@ -59,6 +73,8 @@ class Table(Component):
     header_style: Style = Field(default_factory=Style)
     body_style: Style = Field(default_factory=Style)
     column_style: Dict[str, Style] = Field(default_factory=dict)
+    predefined_style: Optional[str] = Field(default="Table Style Light 1")
+    max_col_width: Optional[int] = Field(default=None)
 
 
 class Sheet(BaseModel):

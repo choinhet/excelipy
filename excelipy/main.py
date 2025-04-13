@@ -21,8 +21,12 @@ def main():
                 ep.Text(
                     text="This is my table",
                     style=ep.Style(bold=True),
+                    width=4,
                 ),
-                ep.Fill(width=4, style=ep.Style(background="#D0D0D0")),
+                ep.Fill(
+                    width=4,
+                    style=ep.Style(background="#D0D0D0"),
+                ),
                 ep.Table(
                     data=df,
                     header_style=ep.Style(
@@ -40,6 +44,7 @@ def main():
             style=ep.Style(
                 font_size=14,
                 font_family="Arial",
+                padding=1,
             ),
         ),
     ]

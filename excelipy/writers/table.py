@@ -18,8 +18,37 @@ def write_table(
 ) -> Tuple[int, int]:
     headers = list(component.data.columns)
     data = component.data.values
+
     x_size = len(headers)
     y_size = len(data)
+
+    col_formats = {}
+    for idx, col in enumerate(component.data.columns):
+        max_content_size = component.data[col].apply(str).apply(len).max()
+        max_size = max(len(col), max_content_size)
+        cur_col = origin[0] + idx
+
+        all_styles = [
+            default_style,
+            component.body_style,
+            component.column_style.get(col),
+        ]
+        filtered_styles = [s for s in all_styles if s is not None]
+        col_format = process_style(
+            workbook,
+            filtered_styles,
+        )
+
+        col_formats[col] = col_format
+        f = col_format.font_size
+        cur_size = ((f * 10 // 4) + (max_size * 18)) // 10
+
+        cur_size = min(
+            cur_size,
+            component.max_col_width or cur_size,
+        )
+
+        worksheet.set_column(cur_col, cur_col, cur_size)
 
     header_format = process_style(
         workbook,
@@ -28,20 +57,6 @@ def write_table(
             component.header_style,
         ],
     )
-
-    col_formats = {}
-    for header in headers:
-        all_styles = [
-            default_style,
-            component.body_style,
-            component.column_style.get(header),
-        ]
-        filtered_styles = [s for s in all_styles if s is not None]
-        col_format = process_style(
-            workbook,
-            filtered_styles,
-        )
-        col_formats[header] = col_format
 
     table_options = {
         "data": data,
@@ -53,6 +68,7 @@ def write_table(
             }
             for header in headers
         ],
+        "style": component.predefined_style,
     }
 
     log.debug(f"Writing table at {origin}")
