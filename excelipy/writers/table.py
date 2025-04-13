@@ -38,6 +38,7 @@ def write_table(
             workbook,
             filtered_styles,
         )
+        col_formats[col] = col_format
 
         col_formats[col] = col_format
         f = col_format.font_size
