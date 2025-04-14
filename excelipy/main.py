@@ -32,18 +32,30 @@ def main():
                     header_style=ep.Style(
                         bold=True,
                         border=5,
-                        border_color="#303030",
+                        border_color="#F02932",
                     ),
                     body_style=ep.Style(font_size=18),
                     column_style={
-                        "testing": ep.Style(font_size=10),
+                        "testing": ep.Style(
+                            font_size=10,
+                            align="center",
+                        ),
+                    },
+                    column_width={
+                        "tested": 20,
+                    },
+                    row_style={
+                        1: ep.Style(
+                            border=2,
+                            border_color="#F02932",
+                        )
                     },
                     style=ep.Style(padding=1),
-                ),
+                ).with_stripes(pattern="even"),
             ],
             style=ep.Style(
                 font_size=14,
-                font_family="Arial",
+                font_family="Times New Roman",
                 padding=1,
             ),
         ),

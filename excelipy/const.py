@@ -1,4 +1,6 @@
 PROP_MAP = dict(
+    align="align",
+    valign="valign",
     font_size="font_size",
     font_color="font_color",
     font_family="font_name",
@@ -11,4 +13,3 @@ PROP_MAP = dict(
     border_color="border_color",
     background="bg_color",
 )
-

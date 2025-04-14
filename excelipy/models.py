@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, Optional, Sequence
+from typing import Dict, Optional, Sequence, Literal
 
 import pandas as pd
 from pydantic import BaseModel, Field
@@ -9,16 +9,32 @@ class Style(BaseModel):
     class Config:
         frozen = True
 
+    align: Optional[
+        Literal[
+            "left",
+            "center",
+            "right",
+            "fill",
+            "justify",
+            "center_across",
+            "distributed",
+        ]
+    ] = Field(default=None)
+    valign: Optional[
+        Literal[
+            "top",
+            "vcenter",
+            "bottom",
+            "vcenter",
+            "bottom",
+            "vjustify",
+        ]
+    ] = Field(default=None)
     padding: Optional[int] = Field(default=None)
     padding_left: Optional[int] = Field(default=None)
     padding_right: Optional[int] = Field(default=None)
     padding_top: Optional[int] = Field(default=None)
     padding_bottom: Optional[int] = Field(default=None)
-    margin: Optional[int] = Field(default=None)
-    margin_left: Optional[int] = Field(default=None)
-    margin_right: Optional[int] = Field(default=None)
-    margin_top: Optional[int] = Field(default=None)
-    margin_bottom: Optional[int] = Field(default=None)
     font_size: Optional[int] = Field(default=None)
     font_color: Optional[str] = Field(default=None)
     font_family: Optional[str] = Field(default=None)
@@ -73,8 +89,27 @@ class Table(Component):
     header_style: Style = Field(default_factory=Style)
     body_style: Style = Field(default_factory=Style)
     column_style: Dict[str, Style] = Field(default_factory=dict)
-    predefined_style: Optional[str] = Field(default="Table Style Light 1")
+    column_width: Dict[str, int] = Field(default_factory=dict)
+    row_style: Dict[int, Style] = Field(default_factory=dict)
     max_col_width: Optional[int] = Field(default=None)
+    header_filters: bool = Field(default=True)
+
+    def with_stripes(
+        self,
+        color: str = "#D0D0D0",
+        pattern: Literal["even", "odd"] = "odd",
+    ) -> "Table":
+        return self.model_copy(
+            update=dict(
+                row_style={
+                    idx: self.row_style.get(idx, Style()).merge(Style(background=color))
+                    if (pattern == "odd" and idx % 2 != 0)
+                    or (pattern == "even" and idx % 2 == 0)
+                    else self.row_style.get(idx, Style())
+                    for idx in range(self.data.shape[0])
+                }
+            )
+        )
 
 
 class Sheet(BaseModel):

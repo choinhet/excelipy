@@ -8,6 +8,44 @@ from excelipy.style import process_style
 
 log = logging.getLogger("excelipy")
 
+DEFAULT_FONT_SIZE = 11
+SCALING_FACTOR = 1
+BASE_PADDING = 2
+
+
+def get_auto_width(
+    header: str,
+    component: Table,
+    default_style: Style,
+) -> int:
+    header_len = len(header)
+    col_len = component.data[header].apply(str).apply(len).max()
+    max_len = max(header_len, col_len)
+    max_font_size = max(
+        (
+            component.header_style.font_size
+            or default_style.font_size
+            or DEFAULT_FONT_SIZE
+        ),
+        (
+            component.column_style.get(header, Style()).font_size
+            or component.body_style.font_size
+            or default_style.font_size
+            or DEFAULT_FONT_SIZE
+        ),
+        (
+            max(
+                s.font_size
+                or component.body_style.font_size
+                or default_style.font_size
+                or DEFAULT_FONT_SIZE
+                for s in component.row_style.values()
+            )
+        ),
+    )
+    font_factor = max_font_size / DEFAULT_FONT_SIZE
+    return SCALING_FACTOR * font_factor * max_len + BASE_PADDING
+
 
 def write_table(
     workbook: Workbook,
@@ -16,68 +54,52 @@ def write_table(
     default_style: Style,
     origin: Tuple[int, int] = (0, 0),
 ) -> Tuple[int, int]:
-    headers = list(component.data.columns)
-    data = component.data.values
+    x_size = component.data.shape[1]
+    y_size = component.data.shape[0]
 
-    x_size = len(headers)
-    y_size = len(data)
-
-    col_formats = {}
-    for idx, col in enumerate(component.data.columns):
-        max_content_size = component.data[col].apply(str).apply(len).max()
-        max_size = max(len(col), max_content_size)
-        cur_col = origin[0] + idx
-
-        all_styles = [
-            default_style,
-            component.body_style,
-            component.column_style.get(col),
-        ]
-        filtered_styles = [s for s in all_styles if s is not None]
-        col_format = process_style(
-            workbook,
-            filtered_styles,
+    header_format = process_style(workbook, [default_style, component.header_style])
+    for col_idx, header in enumerate(component.data.columns):
+        worksheet.write(
+            origin[1],
+            origin[0] + col_idx,
+            header,
+            header_format,
         )
-        col_formats[col] = col_format
+        set_width = component.column_width.get(header)
+        if set_width:
+            estimated_width = set_width
+        else:
+            estimated_width = get_auto_width(header, component, default_style)
+        worksheet.set_column(origin[1], origin[0] + col_idx, int(estimated_width))
 
-        col_formats[col] = col_format
-        f = col_format.font_size
-        cur_size = ((f * 10 // 4) + (max_size * 18)) // 10
-
-        cur_size = min(
-            cur_size,
-            component.max_col_width or cur_size,
+    if component.header_filters:
+        worksheet.autofilter(
+            origin[1],
+            origin[0],
+            origin[1],
+            origin[0] + len(list(component.data.columns)) - 1,
         )
 
-        worksheet.set_column(cur_col, cur_col, cur_size)
+    for col_idx, col in enumerate(component.data.columns):
+        col_style = component.column_style.get(col)
+        for row_idx, (_, row) in enumerate(component.data.iterrows()):
+            row_style = component.row_style.get(row_idx)
+            non_none = filter(
+                None,
+                [
+                    default_style,
+                    component.body_style,
+                    col_style,
+                    row_style,
+                ],
+            )
+            current_format = process_style(workbook, list(non_none))
+            cell = row[col]
+            worksheet.write(
+                origin[1] + row_idx + 1,
+                origin[0] + col_idx,
+                cell,
+                current_format,
+            )
 
-    header_format = process_style(
-        workbook,
-        [
-            default_style,
-            component.header_style,
-        ],
-    )
-
-    table_options = {
-        "data": data,
-        "columns": [
-            {
-                "header": header,
-                "header_format": header_format,
-                "format": col_formats[header],
-            }
-            for header in headers
-        ],
-        "style": component.predefined_style,
-    }
-
-    log.debug(f"Writing table at {origin}")
-    worksheet.add_table(
-        origin[1],
-        origin[0],
-        y_size + origin[1],
-        x_size + origin[0] - 1,
-        table_options,
-    )
-    return x_size, y_size + 1
+    return x_size, y_size
