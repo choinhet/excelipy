@@ -1,0 +1,6 @@
+version: "3"
+
+tasks:
+  coverage:
+    cmds:
+      - uv run pytest test/ --cov=excelipy --cov-report=xml --cov-report=term-missing
