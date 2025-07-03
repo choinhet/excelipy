@@ -49,7 +49,7 @@ Result:
 ## Working with images
 
 You can also add images to your Excel sheets.
-Auto-
+Auto-scale, based on PIL image size.
 
 ```python
 import excelipy as ep
