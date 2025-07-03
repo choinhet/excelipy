@@ -59,7 +59,7 @@ def save(excel: Excel):
                 sheet.style,
                 cur_origin,
             )
-            origin = origin[0], origin[1] + y
+            origin = origin[0] + component.style.pr(), origin[1] + y + component.style.pb()
 
     workbook.close()
     log.debug("Workbook closed")
