@@ -4,11 +4,12 @@ from typing import Tuple
 import xlsxwriter
 from xlsxwriter.workbook import Workbook, Worksheet
 
-from excelipy.models import Component, Excel, Fill, Style, Table, Text
+from excelipy.models import Component, Excel, Fill, Style, Table, Text, Image
 from excelipy.writers import (
     write_fill,
     write_table,
     write_text,
+    write_image,
 )
 
 log = logging.getLogger("excelipy")
@@ -25,6 +26,7 @@ def write_component(
         Table: write_table,
         Text: write_text,
         Fill: write_fill,
+        Image: write_image,
     }
 
     render_func = writing_map.get(type(component))

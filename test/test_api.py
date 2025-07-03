@@ -1,9 +1,21 @@
+import importlib.resources as pkg_resources
 from pathlib import Path
 
 import pandas as pd
 import pytest
 
 import excelipy as ep
+from test import resources
+
+
+@pytest.fixture
+def resources_path() -> Path:
+    return Path(str(pkg_resources.files(resources)))
+
+
+@pytest.fixture
+def img_path(resources_path: Path) -> Path:
+    return resources_path / "img.png"
 
 
 @pytest.fixture
@@ -16,7 +28,7 @@ def sample_df() -> pd.DataFrame:
     )
 
 
-def test_api(sample_df: pd.DataFrame):
+def test_api(sample_df: pd.DataFrame, img_path: Path):
     sheets = [
         ep.Sheet(
             name="Hello!",
@@ -55,6 +67,12 @@ def test_api(sample_df: pd.DataFrame):
                     },
                     style=ep.Style(padding=1),
                 ).with_stripes(pattern="even"),
+                ep.Image(
+                    path=img_path,
+                    width=2,
+                    height=5,
+                    style=ep.Style(border=2),
+                ),
             ],
             style=ep.Style(
                 font_size=14,

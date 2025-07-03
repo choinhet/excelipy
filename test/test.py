@@ -73,6 +73,29 @@ def two_tables():
     ep.save(excel)
 
 
+def simple_image():
+    sheets = [
+        ep.Sheet(
+            name="Hello!",
+            components=[
+                ep.Image(
+                    path=Path("resources/img.png"),
+                    width=2,
+                    height=5,
+                    style=ep.Style(border=2),
+                ),
+            ],
+        ),
+    ]
+
+    excel = ep.Excel(
+        path=Path("filename.xlsx"),
+        sheets=sheets,
+    )
+
+    ep.save(excel)
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
-    simple_example()
+    simple_image()

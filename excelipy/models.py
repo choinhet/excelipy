@@ -84,6 +84,12 @@ class Fill(Component):
     height: int = Field(default=1)
 
 
+class Image(Component):
+    path: Path
+    width: int = Field(default=1)
+    height: int = Field(default=1)
+
+
 class Table(Component):
     data: pd.DataFrame
     header_style: Style = Field(default_factory=Style)
@@ -95,16 +101,18 @@ class Table(Component):
     header_filters: bool = Field(default=True)
 
     def with_stripes(
-        self,
-        color: str = "#D0D0D0",
-        pattern: Literal["even", "odd"] = "odd",
+            self,
+            color: str = "#D0D0D0",
+            pattern: Literal["even", "odd"] = "odd",
     ) -> "Table":
         return self.model_copy(
             update=dict(
                 row_style={
-                    idx: self.row_style.get(idx, Style()).merge(Style(background=color))
+                    idx: self.row_style.get(idx, Style()).merge(
+                        Style(background=color)
+                        )
                     if (pattern == "odd" and idx % 2 != 0)
-                    or (pattern == "even" and idx % 2 == 0)
+                       or (pattern == "even" and idx % 2 == 0)
                     else self.row_style.get(idx, Style())
                     for idx in range(self.data.shape[0])
                 }

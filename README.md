@@ -20,6 +20,8 @@ intuitive and easier to manage than writing raw Excel files.
 ## Simple Example
 
 ```python
+import excelipy as ep
+
 sheets = [
     ep.Sheet(
         name="Hello!",
@@ -44,9 +46,45 @@ Result:
 
 ![simple_example.png](static/simple_example.png)
 
+## Working with images
+
+You can also add images to your Excel sheets.
+Auto-
+
+```python
+import excelipy as ep
+
+sheets = [
+    ep.Sheet(
+        name="Hello!",
+        components=[
+            ep.Image(
+                path=Path("resources/img.png"),
+                width=2,
+                height=5,
+                style=ep.Style(border=2),
+            ),
+        ],
+    ),
+]
+
+excel = ep.Excel(
+    path=Path("filename.xlsx"),
+    sheets=sheets,
+)
+
+ep.save(excel)
+```
+
+Result:
+
+![image_example.png](static/image_example.png)
+
 ## Advanced Example
 
 ```python
+import excelipy as ep
+
 sheets = [
     ep.Sheet(
         name="Hello!",
