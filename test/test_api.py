@@ -1,40 +1,22 @@
-# Excelipy
-
-[![codecov](https://codecov.io/gh/choinhet/excelipy/graph/badge.svg?token=${CODECOV_TOKEN})](https://codecov.io/gh/choinhet/excelipy)
-
-## Installation
-
-You can install the package using pip:
-
-```bash
-pip install excelipy
-```
-
-## Usage
-
-The idea for this package is for it to be a declarative way of using the
-xlsxwritter.
-It allows you to define Excel files using Python objects, which can be more
-intuitive and easier to manage than writing raw Excel files.
-Here is a simple example:
-
-```python
-import logging
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 import excelipy as ep
 
 
-def main():
-    df = pd.DataFrame(
+@pytest.fixture
+def sample_df() -> pd.DataFrame:
+    return pd.DataFrame(
         {
             "testing": [1, 2, 3],
             "tested": ["Yay", "Thanks", "Bud"],
         }
     )
 
+
+def test_api(sample_df: pd.DataFrame):
     sheets = [
         ep.Sheet(
             name="Hello!",
@@ -49,7 +31,7 @@ def main():
                     style=ep.Style(background="#D0D0D0"),
                 ),
                 ep.Table(
-                    data=df,
+                    data=sample_df,
                     header_style=ep.Style(
                         bold=True,
                         border=5,
@@ -82,24 +64,23 @@ def main():
         ),
     ]
 
+    temp_dir = Path("temp")
+    temp_dir.mkdir(exist_ok=True, parents=True)
+    temp_path = temp_dir / "filename.xlsx"
+
     excel = ep.Excel(
-        path=Path("filename.xlsx"),
+        path=temp_path,
         sheets=sheets,
     )
 
     ep.save(excel)
 
+    assert temp_path.exists(), "Excel file was not created"
+    assert temp_path.is_file(), "Path is not a file"
+    assert temp_path.stat().st_size > 0, "Excel file is empty"
+    temp_path.unlink(missing_ok=True)
+    temp_dir.rmdir()
+
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)
-    main()
-```
-
-This is an exaggerated example, to show the capabilities of the package. You can
-see that for a table, you can define the header style, body style, column
-styles, row styles, and even the column widths. You can also add text and fill
-components to the sheet.
-
-This is the result:
-
-![example.png](static/example.png)
+    pytest.main([__file__])

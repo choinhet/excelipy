@@ -26,9 +26,9 @@ def write_component(
         Text: write_text,
         Fill: write_fill,
     }
+
     render_func = writing_map.get(type(component))
-    if render_func is None:
-        return 0, 0
+
     return render_func(
         workbook,
         worksheet,
