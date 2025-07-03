@@ -10,7 +10,7 @@ log = logging.getLogger("excelipy")
 
 DEFAULT_FONT_SIZE = 11
 SCALING_FACTOR = 1
-BASE_PADDING = 2
+BASE_PADDING = 3
 
 
 def get_auto_width(

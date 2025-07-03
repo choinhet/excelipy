@@ -16,83 +16,90 @@ The idea for this package is for it to be a declarative way of using the
 xlsxwritter.
 It allows you to define Excel files using Python objects, which can be more
 intuitive and easier to manage than writing raw Excel files.
-Here is a simple example:
+
+## Simple Example
 
 ```python
-import logging
-from pathlib import Path
+sheets = [
+    ep.Sheet(
+        name="Hello!",
+        components=[
+            ep.Text(text="Hello world!", width=2),
+            ep.Fill(width=2, style=ep.Style(background="#33c481")),
+            ep.Table(data=df),
+        ],
+        style=ep.Style(padding=1)
+    ),
+]
 
-import pandas as pd
+excel = ep.Excel(
+    path=Path("filename.xlsx"),
+    sheets=sheets,
+)
 
-import excelipy as ep
+ep.save(excel)
+```
 
+Result:
 
-def main():
-    df = pd.DataFrame(
-        {
-            "testing": [1, 2, 3],
-            "tested": ["Yay", "Thanks", "Bud"],
-        }
-    )
+![simple_example.png](static/simple_example.png)
 
-    sheets = [
-        ep.Sheet(
-            name="Hello!",
-            components=[
-                ep.Text(
-                    text="This is my table",
-                    style=ep.Style(bold=True),
-                    width=4,
-                ),
-                ep.Fill(
-                    width=4,
-                    style=ep.Style(background="#D0D0D0"),
-                ),
-                ep.Table(
-                    data=df,
-                    header_style=ep.Style(
-                        bold=True,
-                        border=5,
-                        border_color="#F02932",
-                    ),
-                    body_style=ep.Style(font_size=18),
-                    column_style={
-                        "testing": ep.Style(
-                            font_size=10,
-                            align="center",
-                        ),
-                    },
-                    column_width={
-                        "tested": 20,
-                    },
-                    row_style={
-                        1: ep.Style(
-                            border=2,
-                            border_color="#F02932",
-                        )
-                    },
-                    style=ep.Style(padding=1),
-                ).with_stripes(pattern="even"),
-            ],
-            style=ep.Style(
-                font_size=14,
-                font_family="Times New Roman",
-                padding=1,
+## Advanced Example
+
+```python
+sheets = [
+    ep.Sheet(
+        name="Hello!",
+        components=[
+            ep.Text(
+                text="This is my table",
+                style=ep.Style(bold=True),
+                width=4,
             ),
+            ep.Fill(
+                width=4,
+                style=ep.Style(background="#D0D0D0"),
+            ),
+            ep.Table(
+                data=df,
+                header_style=ep.Style(
+                    bold=True,
+                    border=5,
+                    border_color="#F02932",
+                ),
+                body_style=ep.Style(font_size=18),
+                column_style={
+                    "testing": ep.Style(
+                        font_size=10,
+                        align="center",
+                    ),
+                },
+                column_width={
+                    "tested": 20,
+                },
+                row_style={
+                    1: ep.Style(
+                        border=2,
+                        border_color="#F02932",
+                    )
+                },
+                style=ep.Style(padding=1),
+            ).with_stripes(pattern="even"),
+        ],
+        style=ep.Style(
+            font_size=14,
+            font_family="Times New Roman",
+            padding=1,
         ),
-    ]
+    ),
+]
 
-    excel = ep.Excel(
-        path=Path("filename.xlsx"),
-        sheets=sheets,
-    )
+excel = ep.Excel(
+    path=Path("filename.xlsx"),
+    sheets=sheets,
+)
 
-    ep.save(excel)
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)
-    main()
+ep.save(excel)
 ```
 
 This is an exaggerated example, to show the capabilities of the package. You can
@@ -102,4 +109,4 @@ components to the sheet.
 
 This is the result:
 
-![example.png](static/example.png)
+![advanced_example.png](static/advanced_example.png)
