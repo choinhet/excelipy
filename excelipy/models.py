@@ -99,6 +99,7 @@ class Table(Component):
     row_style: Dict[int, Style] = Field(default_factory=dict)
     max_col_width: Optional[int] = Field(default=None)
     header_filters: bool = Field(default=True)
+    default_style: bool = Field(default=True)
 
     def with_stripes(
             self,
@@ -123,6 +124,7 @@ class Table(Component):
 class Sheet(BaseModel):
     name: str
     components: Sequence[Component] = Field(default_factory=list)
+    grid_lines: bool = Field(default=True)
     style: Style = Field(default_factory=Style)
 
 

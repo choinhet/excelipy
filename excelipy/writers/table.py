@@ -5,6 +5,7 @@ from xlsxwriter.workbook import Workbook, Worksheet
 
 from excelipy.models import Style, Table
 from excelipy.style import process_style
+from excelipy.styles.table import DEFAULT_HEADER_STYLE, DEFAULT_BODY_STYLE
 
 log = logging.getLogger("excelipy")
 
@@ -61,10 +62,12 @@ def write_table(
     x_size = component.data.shape[1]
     y_size = component.data.shape[0] + 1  # +1 for header row
 
-    header_format = process_style(
-        workbook,
-        [default_style, component.header_style]
-        )
+    header_styles = [default_style, component.header_style]
+    if component.default_style:
+        header_styles = [DEFAULT_HEADER_STYLE] + header_styles
+
+    header_format = process_style(workbook, header_styles)
+
     for col_idx, header in enumerate(component.data.columns):
         worksheet.write(
             origin[1],
@@ -95,15 +98,15 @@ def write_table(
         col_style = component.column_style.get(col)
         for row_idx, (_, row) in enumerate(component.data.iterrows()):
             row_style = component.row_style.get(row_idx)
-            non_none = filter(
-                None,
-                [
-                    default_style,
-                    component.body_style,
-                    col_style,
-                    row_style,
-                ],
-            )
+            body_style = [
+                default_style,
+                component.body_style,
+                col_style,
+                row_style,
+            ]
+            if component.default_style:
+                body_style = [DEFAULT_BODY_STYLE] + body_style
+            non_none = filter(None, body_style)
             current_format = process_style(workbook, list(non_none))
             cell = row[col]
             worksheet.write(

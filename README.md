@@ -30,7 +30,8 @@ sheets = [
             ep.Fill(width=2, style=ep.Style(background="#33c481")),
             ep.Table(data=df),
         ],
-        style=ep.Style(padding=1)
+        style=ep.Style(padding=1),
+        grid_lines=False,
     ),
 ]
 
@@ -80,71 +81,10 @@ Result:
 
 ![image_example.png](static/image_example.png)
 
-## Advanced Example
+## Extra
 
-```python
-import excelipy as ep
+There are a lot of options regarding how to style your sheets.
+The tables come with a default style, which you can deactivate through the `default_style` flag.
 
-sheets = [
-    ep.Sheet(
-        name="Hello!",
-        components=[
-            ep.Text(
-                text="This is my table",
-                style=ep.Style(bold=True),
-                width=4,
-            ),
-            ep.Fill(
-                width=4,
-                style=ep.Style(background="#D0D0D0"),
-            ),
-            ep.Table(
-                data=df,
-                header_style=ep.Style(
-                    bold=True,
-                    border=5,
-                    border_color="#F02932",
-                ),
-                body_style=ep.Style(font_size=18),
-                column_style={
-                    "testing": ep.Style(
-                        font_size=10,
-                        align="center",
-                    ),
-                },
-                column_width={
-                    "tested": 20,
-                },
-                row_style={
-                    1: ep.Style(
-                        border=2,
-                        border_color="#F02932",
-                    )
-                },
-                style=ep.Style(padding=1),
-            ).with_stripes(pattern="even"),
-        ],
-        style=ep.Style(
-            font_size=14,
-            font_family="Times New Roman",
-            padding=1,
-        ),
-    ),
-]
-
-excel = ep.Excel(
-    path=Path("filename.xlsx"),
-    sheets=sheets,
-)
-
-ep.save(excel)
-```
-
-This is an exaggerated example, to show the capabilities of the package. You can
-see that for a table, you can define the header style, body style, column
-styles, row styles, and even the column widths. You can also add text and fill
-components to the sheet.
-
-This is the result:
-
-![advanced_example.png](static/advanced_example.png)
+The majority of the other styles will be added through the Style class. 
+Everything should be well typed, so the autocomplete should help with the options available.

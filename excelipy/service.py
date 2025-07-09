@@ -16,11 +16,11 @@ log = logging.getLogger("excelipy")
 
 
 def write_component(
-    workbook: Workbook,
-    worksheet: Worksheet,
-    component: Component,
-    default_style: Style,
-    origin: Tuple[int, int] = (0, 0),
+        workbook: Workbook,
+        worksheet: Worksheet,
+        component: Component,
+        default_style: Style,
+        origin: Tuple[int, int] = (0, 0),
 ) -> Tuple[int, int]:
     writing_map = {
         Table: write_table,
@@ -49,6 +49,9 @@ def save(excel: Excel):
             sheet.style.pt(),
         )
         worksheet = workbook.add_worksheet(sheet.name)
+        if not sheet.grid_lines:
+            worksheet.hide_gridlines(2)
+
         for component in sheet.components:
             cur_origin = (
                 origin[0] + component.style.pl(),
@@ -61,7 +64,8 @@ def save(excel: Excel):
                 sheet.style,
                 cur_origin,
             )
-            origin = origin[0] + component.style.pr(), origin[1] + y + component.style.pb()
+            origin = origin[0] + component.style.pr(), origin[
+                1] + y + component.style.pb()
 
     workbook.close()
     log.debug("Workbook closed")

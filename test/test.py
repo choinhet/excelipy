@@ -24,7 +24,8 @@ def simple_example():
                 ep.Fill(width=2, style=ep.Style(background="#33c481")),
                 ep.Table(data=df()),
             ],
-            style=ep.Style(padding=1)
+            style=ep.Style(padding=1),
+            grid_lines=False,
         ),
     ]
 
@@ -96,6 +97,26 @@ def simple_image():
     ep.save(excel)
 
 
+def one_table_no_grid():
+    sheets = [
+        ep.Sheet(
+            name="Hello!",
+            components=[
+                ep.Table(data=df())
+            ],
+            grid_lines=False,
+            style=ep.Style(padding=1),
+        ),
+    ]
+
+    excel = ep.Excel(
+        path=Path("filename.xlsx"),
+        sheets=sheets,
+    )
+
+    ep.save(excel)
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
-    simple_image()
+    simple_example()

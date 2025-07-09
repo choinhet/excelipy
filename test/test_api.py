@@ -79,6 +79,7 @@ def test_api(sample_df: pd.DataFrame, img_path: Path):
                 font_family="Times New Roman",
                 padding=1,
             ),
+            grid_lines=False,
         ),
     ]
 
