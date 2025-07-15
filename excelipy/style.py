@@ -21,13 +21,13 @@ def _process_single(workbook: Workbook, style: Style) -> Format:
 
 
 def process_style(
-    workbook: Workbook,
-    styles: Sequence[Style],
+        workbook: Workbook,
+        styles: Sequence[Style],
 ) -> Format:
+    styles = list(filter(None, styles))
     cur_style = Style()
     for style in styles:
         cur_style = cur_style.merge(style)
     if cur_style in cached_styles:
         return cached_styles[cur_style]
-    format = _process_single(workbook, cur_style)
-    return format
+    return _process_single(workbook, cur_style)

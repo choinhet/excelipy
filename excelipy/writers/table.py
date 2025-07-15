@@ -22,10 +22,15 @@ def get_auto_width(
     header_len = len(header)
     col_len = component.data[header].apply(str).apply(len).max()
     max_len = max(header_len, col_len)
+    header_font_sizes = list(filter(None, map(
+        lambda it: it.font_size,
+        component.header_style.values()
+    )))
+    max_header_font_size = max(header_font_sizes) if header_font_sizes else None
     header_font_size = (
-            component.header_style.font_size
-            or default_style.font_size
-            or DEFAULT_FONT_SIZE
+        max_header_font_size
+        or default_style.font_size
+        or DEFAULT_FONT_SIZE
     )
     column_font_size = (
             component.column_style.get(header, Style()).font_size
@@ -62,13 +67,14 @@ def write_table(
     x_size = component.data.shape[1]
     y_size = component.data.shape[0] + 1  # +1 for header row
 
-    header_styles = [default_style, component.header_style]
-    if component.default_style:
-        header_styles = [DEFAULT_HEADER_STYLE] + header_styles
-
-    header_format = process_style(workbook, header_styles)
-
     for col_idx, header in enumerate(component.data.columns):
+        current_header_style = component.header_style.get(header)
+        header_styles = [default_style, current_header_style]
+
+        if component.default_style:
+            header_styles = [DEFAULT_HEADER_STYLE] + header_styles
+
+        header_format = process_style(workbook, header_styles)
         worksheet.write(
             origin[1],
             origin[0] + col_idx,
@@ -104,10 +110,11 @@ def write_table(
                 col_style,
                 row_style,
             ]
+
             if component.default_style:
                 body_style = [DEFAULT_BODY_STYLE] + body_style
-            non_none = filter(None, body_style)
-            current_format = process_style(workbook, list(non_none))
+
+            current_format = process_style(workbook, body_style)
             cell = row[col]
             worksheet.write(
                 origin[1] + row_idx + 1,

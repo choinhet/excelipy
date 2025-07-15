@@ -44,11 +44,13 @@ def test_api(sample_df: pd.DataFrame, img_path: Path):
                 ),
                 ep.Table(
                     data=sample_df,
-                    header_style=ep.Style(
-                        bold=True,
-                        border=5,
-                        border_color="#F02932",
-                    ),
+                    header_style={
+                        col: ep.Style(
+                            bold=True,
+                            border=5,
+                            border_color="#F02932",
+                        ) for col in sample_df.columns
+                    },
                     body_style=ep.Style(font_size=18),
                     column_style={
                         "testing": ep.Style(
