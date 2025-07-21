@@ -100,6 +100,8 @@ class Table(Component):
     max_col_width: Optional[int] = Field(default=None)
     header_filters: bool = Field(default=True)
     default_style: bool = Field(default=True)
+    auto_width_tuning: int = Field(default=5.5)
+    auto_width_padding: int = Field(default=3)
 
     def with_stripes(
             self,
@@ -111,7 +113,7 @@ class Table(Component):
                 row_style={
                     idx: self.row_style.get(idx, Style()).merge(
                         Style(background=color)
-                        )
+                    )
                     if (pattern == "odd" and idx % 2 != 0)
                        or (pattern == "even" and idx % 2 == 0)
                     else self.row_style.get(idx, Style())

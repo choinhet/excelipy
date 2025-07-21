@@ -11,7 +11,6 @@ from excelipy.styles.table import DEFAULT_HEADER_STYLE, DEFAULT_BODY_STYLE
 log = logging.getLogger("excelipy")
 
 DEFAULT_FONT_SIZE = 11
-BASE_PADDING = 3
 
 
 def get_text_size(
@@ -92,7 +91,7 @@ def get_auto_width(
 
     col_len = all_col_len.max()
     max_len = max(header_len, col_len)
-    result = max_len // 5.5 + BASE_PADDING
+    result = max_len // component.auto_width_tuning + component.auto_width_padding
     return result
 
 
