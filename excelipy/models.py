@@ -100,8 +100,8 @@ class Table(Component):
     max_col_width: Optional[int] = Field(default=None)
     header_filters: bool = Field(default=True)
     default_style: bool = Field(default=True)
-    auto_width_tuning: int = Field(default=5.5)
-    auto_width_padding: int = Field(default=3)
+    auto_width_tuning: int = Field(default=5)
+    auto_width_padding: int = Field(default=5)
 
     def with_stripes(
             self,
