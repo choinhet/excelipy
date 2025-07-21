@@ -16,6 +16,7 @@ The idea for this package is for it to be a declarative way of using the
 xlsxwritter.
 It allows you to define Excel files using Python objects, which can be more
 intuitive and easier to manage than writing raw Excel files.
+It also has auto-width detection that uses PIL under the hood :)
 
 ## Simple Example
 

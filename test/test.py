@@ -15,6 +15,19 @@ def df() -> pd.DataFrame:
     )
 
 
+def df2() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "testing": [1, 2, 3],
+            "tested": [
+                "Yayyyyyyyyyyyyyyyyyyyyyyyyy this is a long phrase",
+                "Thanks a lot",
+                "Bud",
+            ],
+        }
+    )
+
+
 def simple_example():
     sheets = [
         ep.Sheet(
@@ -59,6 +72,16 @@ def two_tables():
     sheets = [
         ep.Sheet(
             name="Hello!",
+            components=[
+                ep.Table(
+                    data=df2(),
+                    style=ep.Style(padding_bottom=1, font_size=20)
+                    ),
+                ep.Table(data=df()),
+            ],
+        ),
+        ep.Sheet(
+            name="Hello again!",
             components=[
                 ep.Table(data=df(), style=ep.Style(padding_bottom=1)),
                 ep.Table(data=df()),
@@ -119,4 +142,4 @@ def one_table_no_grid():
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
-    simple_example()
+    two_tables()
