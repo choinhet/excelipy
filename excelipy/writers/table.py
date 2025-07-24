@@ -146,7 +146,7 @@ def write_table(
             f"Estimated width for {header}: {estimated_width} [Sheet: {worksheet.name}]"
         )
         worksheet.set_column(
-            origin[1],
+            origin[0] + col_idx,
             origin[0] + col_idx,
             int(estimated_width)
         )
