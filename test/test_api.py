@@ -28,7 +28,19 @@ def sample_df() -> pd.DataFrame:
     )
 
 
-def test_api(sample_df: pd.DataFrame, img_path: Path):
+@pytest.fixture
+def empty_df() -> pd.DataFrame:
+    num_rows = 2
+    num_cols = 9
+    cols = [" "] * num_cols
+    return pd.DataFrame(" ", index=range(num_rows), columns=cols)
+
+
+def test_api(
+        sample_df: pd.DataFrame,
+        empty_df: pd.DataFrame,
+        img_path: Path
+):
     sheets = [
         ep.Sheet(
             name="Hello!",
@@ -38,6 +50,9 @@ def test_api(sample_df: pd.DataFrame, img_path: Path):
                     style=ep.Style(bold=True),
                     width=4,
                 ),
+                ep.Fill(),
+                ep.Text(text="Monowidth"),
+                ep.Table(data=empty_df),
                 ep.Fill(
                     width=4,
                     style=ep.Style(background="#D0D0D0"),

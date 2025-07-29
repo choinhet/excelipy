@@ -1,6 +1,7 @@
 import logging
 from typing import Tuple, Dict, Optional
 
+import pandas as pd
 from PIL import ImageFont
 from xlsxwriter.workbook import Workbook, Worksheet
 
@@ -175,7 +176,11 @@ def write_table(
                 body_style = [DEFAULT_BODY_STYLE] + body_style
 
             current_format = process_style(workbook, body_style)
+
             cell = row[col]
+            if isinstance(cell, pd.Series):
+                cell = cell.iloc[0]
+
             worksheet.write(
                 origin[1] + row_idx + 1,
                 origin[0] + col_idx,
