@@ -28,6 +28,11 @@ def df2() -> pd.DataFrame:
     )
 
 
+def duplicated_col_df() -> pd.DataFrame:
+    cols = ["Hey Again"] * 2
+    return pd.DataFrame("value", index=range(5), columns=cols)
+
+
 def simple_example():
     sheets = [
         ep.Sheet(
@@ -164,6 +169,29 @@ def default_text_style():
     ep.save(excel)
 
 
+def merged_cols():
+    sheets = [
+        ep.Sheet(
+            name="Hello!",
+            components=[
+                ep.Table(
+                    data=duplicated_col_df(),
+                    header_filters=False,
+                )
+            ],
+            grid_lines=False,
+            style=ep.Style(padding=1),
+        ),
+    ]
+
+    excel = ep.Excel(
+        path=Path("filename.xlsx"),
+        sheets=sheets,
+    )
+
+    ep.save(excel)
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
-    default_text_style()
+    merged_cols()

@@ -82,15 +82,33 @@ def get_auto_width(
         component.body_style,
         component.column_style.get(header),
     )
-    all_col_len = component.data[header].apply(str).apply(
-        lambda it: get_text_size(
-            it,
-            col_font_size,
-            col_font_family,
-        )
-    )
+    cur_col = component.data[header]
 
-    col_len = all_col_len.max()
+    if isinstance(cur_col, pd.DataFrame):
+        cur_max = 0
+        for i in range(cur_col.columns.size):
+            cur = cur_col.iloc[:, 0]
+            all_col_len = cur.apply(str).apply(
+                lambda it: get_text_size(
+                    it,
+                    col_font_size,
+                    col_font_family,
+                )
+            )
+            _cur_max = all_col_len.max()
+            if _cur_max > cur_max:
+                cur_max = _cur_max
+        col_len = cur_max
+    else:
+        all_col_len = cur_col.apply(str).apply(
+            lambda it: get_text_size(
+                it,
+                col_font_size,
+                col_font_family,
+            )
+        )
+
+        col_len = all_col_len.max()
     max_len = max(header_len, col_len)
     result = max_len // component.auto_width_tuning + component.auto_width_padding
     return result
