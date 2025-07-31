@@ -76,7 +76,7 @@ def two_tables():
                 ep.Table(
                     data=df2(),
                     style=ep.Style(padding_bottom=1, font_size=20)
-                    ),
+                ),
                 ep.Table(data=df()),
             ],
         ),
@@ -140,6 +140,30 @@ def one_table_no_grid():
     ep.save(excel)
 
 
+def default_text_style():
+    sheets = [
+        ep.Sheet(
+            name="Hello!",
+            components=[
+                ep.Text(
+                    text="Hello world! This text should be bigger than the table",
+                    width=2,
+                ),
+                ep.Table(data=df())
+            ],
+            grid_lines=False,
+            style=ep.Style(padding=1),
+        ),
+    ]
+
+    excel = ep.Excel(
+        path=Path("filename.xlsx"),
+        sheets=sheets,
+    )
+
+    ep.save(excel)
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
-    two_tables()
+    default_text_style()
