@@ -170,13 +170,23 @@ def default_text_style():
 
 
 def merged_cols():
+    df = duplicated_col_df()
+    centered_style = {
+        col: ep.Style(
+            align="center",
+            valign="vcenter"
+        ) for col in df.columns
+    }
     sheets = [
         ep.Sheet(
             name="Hello!",
             components=[
                 ep.Table(
-                    data=duplicated_col_df(),
+                    data=df,
+                    header_style=centered_style,
+                    column_style=centered_style,
                     header_filters=False,
+                    # merge_equal_headers=False,
                 )
             ],
             grid_lines=False,

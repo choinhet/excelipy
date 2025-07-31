@@ -103,6 +103,7 @@ class Table(Component):
     default_style: bool = Field(default=True)
     auto_width_tuning: int = Field(default=5)
     auto_width_padding: int = Field(default=5)
+    merge_equal_headers: bool = Field(default=True)
 
     def with_stripes(
             self,

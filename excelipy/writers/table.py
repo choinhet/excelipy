@@ -1,4 +1,5 @@
 import logging
+from collections import defaultdict
 from typing import Tuple, Dict, Optional
 
 import pandas as pd
@@ -129,6 +130,14 @@ def write_table(
 
     global col_size_cache_by_sheet
 
+    idx_by_header = defaultdict(list)
+    if component.merge_equal_headers:
+        for idx, header in enumerate(component.data.columns):
+            past_idx = idx_by_header.get(header, [idx - 1])[-1]
+            if idx == past_idx + 1:
+                idx_by_header[header].append(idx)
+        idx_by_header = {k: v for k, v in idx_by_header.items() if len(v) >= 2}
+
     for col_idx, header in enumerate(component.data.columns):
         current_header_style = component.header_style.get(
             header,
@@ -140,12 +149,30 @@ def write_table(
             header_styles = [DEFAULT_HEADER_STYLE] + header_styles
 
         header_format = process_style(workbook, header_styles)
+        header_write_skip = idx_by_header.get(header, [])
+        is_first = False
+        cur_skip = col_idx in header_write_skip and not (
+            is_first := col_idx == header_write_skip[0]
+        )
+
+        if is_first:
+            merge_size = len(header_write_skip)
+            worksheet.merge_range(
+                origin[1],
+                origin[0],
+                origin[1],
+                origin[0] + merge_size - 1,
+                "",
+                header_format,
+            )
+
         worksheet.write(
             origin[1],
             origin[0] + col_idx,
-            header,
+            header if not cur_skip else "",
             header_format,
         )
+
         set_width = component.column_width.get(header)
         if set_width:
             estimated_width = set_width
