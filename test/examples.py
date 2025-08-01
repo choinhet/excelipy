@@ -29,8 +29,8 @@ def df2() -> pd.DataFrame:
 
 
 def duplicated_col_df() -> pd.DataFrame:
-    cols = ["Hey Again"] * 2
-    return pd.DataFrame("value", index=range(5), columns=cols)
+    df = df2()
+    return df.rename(columns={"testing": "tested"})
 
 
 def simple_example():

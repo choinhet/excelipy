@@ -53,6 +53,7 @@ def get_style_font_size(*styles: Style) -> Optional[int]:
 
 def get_auto_width(
         header: str,
+        data: pd.Series,
         component: Table,
         default_style: Style,
 ) -> float:
@@ -83,33 +84,14 @@ def get_auto_width(
         component.body_style,
         component.column_style.get(header),
     )
-    cur_col = component.data[header]
-
-    if isinstance(cur_col, pd.DataFrame):
-        cur_max = 0
-        for i in range(cur_col.columns.size):
-            cur = cur_col.iloc[:, 0]
-            all_col_len = cur.apply(str).apply(
-                lambda it: get_text_size(
-                    it,
-                    col_font_size,
-                    col_font_family,
-                )
-            )
-            _cur_max = all_col_len.max()
-            if _cur_max > cur_max:
-                cur_max = _cur_max
-        col_len = cur_max
-    else:
-        all_col_len = cur_col.apply(str).apply(
-            lambda it: get_text_size(
-                it,
-                col_font_size,
-                col_font_family,
-            )
+    all_col_len = data.apply(str).apply(
+        lambda it: get_text_size(
+            it,
+            col_font_size,
+            col_font_family,
         )
-
-        col_len = all_col_len.max()
+    )
+    col_len = all_col_len.max()
     max_len = max(header_len, col_len)
     result = max_len // component.auto_width_tuning + component.auto_width_padding
     return result
@@ -177,8 +159,13 @@ def write_table(
         if set_width:
             estimated_width = set_width
         else:
+            data = component.data[header]
+            if isinstance(data, pd.DataFrame):
+                data = data.iloc[:, col_idx]
+
             estimated_width = get_auto_width(
                 header,
+                data,
                 component,
                 default_style
             )
@@ -224,7 +211,7 @@ def write_table(
 
             cell = row[col]
             if isinstance(cell, pd.Series):
-                cell = cell.iloc[0]
+                cell = cell.iloc[col_idx]
 
             worksheet.write(
                 origin[1] + row_idx + 1,
