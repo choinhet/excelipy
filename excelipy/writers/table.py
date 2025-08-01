@@ -72,7 +72,7 @@ def get_auto_width(
         header_font_size,
         header_font_family,
     )
-    cells_for_header = component.data[header].shape[1]
+    cells_for_header = len([it for it in component.data.columns if it == header])
     header_len /= cells_for_header
     col_font_size = get_style_font_size(
         default_style,
