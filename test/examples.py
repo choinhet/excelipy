@@ -29,8 +29,19 @@ def df2() -> pd.DataFrame:
 
 
 def duplicated_col_df() -> pd.DataFrame:
-    df = df2()
-    return df.rename(columns={"testing": "tested"})
+    title = "this is a long long long long long title"
+    df = pd.DataFrame(
+        {
+            title: [
+                "Yayyyyyyyyyyyyyyyyyyyyyyyyy this is a long phrase",
+                "Thanks a lot",
+                "Bud",
+            ],
+            "testing": [1, 2, 3],
+            "testing2": [10, 20, 30],
+        }
+    )
+    return df.rename(columns={"testing": title, "testing2": title})
 
 
 def simple_example():
