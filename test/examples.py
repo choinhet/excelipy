@@ -37,6 +37,7 @@ def duplicated_col_df() -> pd.DataFrame:
                 "Thanks a lot",
                 "Bud",
             ],
+            # "bogus": [1, 2, 3],
             "testing": [1, 2, 3],
             "testing2": [10, 20, 30],
         }
@@ -197,7 +198,7 @@ def merged_cols():
                     header_style=centered_style,
                     column_style=centered_style,
                     header_filters=False,
-                    # merge_equal_headers=False,
+                    merge_equal_headers=False,
                 )
             ],
             grid_lines=False,

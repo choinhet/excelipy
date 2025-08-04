@@ -55,6 +55,7 @@ def get_auto_width(
         header: str,
         data: pd.Series,
         component: Table,
+        cur_skip: bool,
         default_style: Style,
 ) -> float:
     header_font_size = get_style_font_size(
@@ -73,7 +74,10 @@ def get_auto_width(
         header_font_family,
     )
     cells_for_header = len([it for it in component.data.columns if it == header])
-    header_len /= cells_for_header
+
+    if cur_skip:
+        header_len /= cells_for_header
+
     col_font_size = get_style_font_size(
         default_style,
         component.style,
@@ -161,14 +165,12 @@ def write_table(
         if set_width:
             estimated_width = set_width
         else:
-            data = component.data[header]
-            if isinstance(data, pd.DataFrame):
-                data = data.iloc[:, col_idx]
-
+            data = component.data.iloc[:, col_idx]
             estimated_width = get_auto_width(
                 header,
                 data,
                 component,
+                cur_skip,
                 default_style
             )
             col_size_cache = col_size_cache_by_sheet.get(worksheet.name, {})
@@ -210,11 +212,7 @@ def write_table(
                 body_style = [DEFAULT_BODY_STYLE] + body_style
 
             current_format = process_style(workbook, body_style)
-
-            cell = row[col]
-            if isinstance(cell, pd.Series):
-                cell = cell.iloc[col_idx]
-
+            cell = row.iloc[col_idx]
             worksheet.write(
                 origin[1] + row_idx + 1,
                 origin[0] + col_idx,
