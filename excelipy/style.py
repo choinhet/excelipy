@@ -1,23 +1,19 @@
-from typing import Dict, Sequence
+from typing import Sequence
 
 from xlsxwriter.workbook import Format, Workbook
 
 from excelipy.const import PROP_MAP
 from excelipy.models import Style
 
-cached_styles: Dict[Style, Format] = {}
-
 
 def _process_single(workbook: Workbook, style: Style) -> Format:
     style_dict = style.model_dump(exclude_none=True)
     style_map = {
         mapped_prop: value
-        for property, value in style_dict.items()
-        if (mapped_prop := PROP_MAP.get(property)) is not None
+        for prop, value in style_dict.items()
+        if (mapped_prop := PROP_MAP.get(prop)) is not None
     }
-    format = workbook.add_format(style_map)
-    cached_styles[style] = format
-    return format
+    return workbook.add_format(style_map)
 
 
 def process_style(
@@ -28,6 +24,15 @@ def process_style(
     cur_style = Style()
     for style in styles:
         cur_style = cur_style.merge(style)
+
+    cached_styles = getattr(workbook, "_excelipy_format_cache", None)
+    if cached_styles is None:
+        cached_styles = {}
+        setattr(workbook, "_excelipy_format_cache", cached_styles)
+
     if cur_style in cached_styles:
         return cached_styles[cur_style]
-    return _process_single(workbook, cur_style)
+
+    result = _process_single(workbook, cur_style)
+    cached_styles[cur_style] = result
+    return result

@@ -41,31 +41,26 @@ def write_component(
 
 
 def save(excel: Excel):
-    workbook = xlsxwriter.Workbook(excel.path)
-    log.debug("Workbook opened")
-    for sheet in excel.sheets:
-        origin = (
-            sheet.style.pl(),
-            sheet.style.pt(),
-        )
-        worksheet = workbook.add_worksheet(sheet.name)
-        if not sheet.grid_lines:
-            worksheet.hide_gridlines(2)
-
-        for component in sheet.components:
-            cur_origin = (
-                origin[0] + component.style.pl(),
-                origin[1] + component.style.pt(),
+    with xlsxwriter.Workbook(excel.path) as workbook:
+        for sheet in excel.sheets:
+            origin = (
+                sheet.style.pl(),
+                sheet.style.pt(),
             )
-            x, y = write_component(
-                workbook,
-                worksheet,
-                component,
-                sheet.style,
-                cur_origin,
-            )
-            origin = origin[0] + component.style.pr(), origin[
-                1] + y + component.style.pb()
+            worksheet = workbook.add_worksheet(sheet.name)
+            if not sheet.grid_lines:
+                worksheet.hide_gridlines(2)
 
-    workbook.close()
-    log.debug("Workbook closed")
+            for component in sheet.components:
+                cur_origin = (
+                    origin[0] + component.style.pl(),
+                    origin[1] + component.style.pt(),
+                )
+                x, y = write_component(
+                    workbook,
+                    worksheet,
+                    component,
+                    sheet.style,
+                    cur_origin,
+                )
+                origin = origin[0] + component.style.pr(), origin[1] + y + component.style.pb()

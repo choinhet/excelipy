@@ -21,13 +21,13 @@ def write_image(
         origin: Tuple[int, int] = (0, 0),
 ) -> Tuple[int, int]:
     log.debug(f"Writing image at {origin}")
-    img = PILImage.open(component.path)
-    img_w, img_h = img.size
+    with PILImage.open(component.path) as img:
+        img_w, img_h = img.size
     log.debug(f"img_w={img_w}, img_h={img_h}")
     expected_width = DEFAULT_COLUMN_WIDTH * component.width
     expected_height = DEFAULT_ROW_HEIGHT * component.height
     log.debug(
-        f"expected_width={expected_width}, expected_height={expected_height}"
+        f"expected_width={expected_width}, expected_height={expected_height}",
     )
     scale_width = expected_width / img_w
     scale_height = expected_height / img_h
@@ -56,6 +56,6 @@ def write_image(
             'x_scale': scale_width,
             'y_scale': scale_height,
             'object_position': 1,  # Move and size with cells
-        }
+        },
     )
     return component.width, component.height

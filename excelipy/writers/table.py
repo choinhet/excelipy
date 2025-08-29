@@ -26,12 +26,12 @@ def get_text_size(
     try:
         cur_font = ImageFont.truetype(
             f"{cur_font_family}.ttf".lower(),
-            cur_font_size
+            cur_font_size,
         )
     except Exception as e:
         cur_font = ImageFont.load_default()
         log.debug(
-            f"Could not load custom font {cur_font_family}, using default. Exception: {e}"
+            f"Could not load custom font {cur_font_family}, using default. Exception: {e}",
         )
 
     return cur_font.getlength(text)
@@ -95,15 +95,12 @@ def get_auto_width(
             it,
             col_font_size,
             col_font_family,
-        )
+        ),
     )
     col_len = all_col_len.max()
     max_len = max(header_len, col_len)
     result = max_len // component.auto_width_tuning + component.auto_width_padding
     return result
-
-
-col_size_cache_by_sheet: Dict[str, Dict[int, int]] = dict()
 
 
 def write_table(
@@ -116,7 +113,10 @@ def write_table(
     x_size = component.data.shape[1]
     y_size = component.data.shape[0] + 1  # +1 for header row
 
-    global col_size_cache_by_sheet
+    col_size_cache_by_sheet = getattr(workbook, "_excelipy_col_size_cache", None)
+    if col_size_cache_by_sheet is None:
+        col_size_cache_by_sheet: Dict[str, Dict[int, int]] = {}
+        setattr(workbook, "_excelipy_col_size_cache", col_size_cache_by_sheet)
 
     idx_by_header = defaultdict(list)
     if component.merge_equal_headers:
@@ -129,7 +129,7 @@ def write_table(
     for col_idx, header in enumerate(component.data.columns):
         current_header_style = component.header_style.get(
             header,
-            component.style
+            component.style,
         )
         header_styles = [default_style, current_header_style]
 
@@ -171,7 +171,7 @@ def write_table(
                 data,
                 component,
                 cur_skip,
-                default_style
+                default_style,
             )
             col_size_cache = col_size_cache_by_sheet.get(worksheet.name, {})
             cur_cached = col_size_cache.get(origin[0] + col_idx, 0)
@@ -180,12 +180,12 @@ def write_table(
             col_size_cache_by_sheet[worksheet.name] = col_size_cache
 
         log.debug(
-            f"Estimated width for {header}: {estimated_width} [Sheet: {worksheet.name}]"
+            f"Estimated width for {header}: {estimated_width} [Sheet: {worksheet.name}]",
         )
         worksheet.set_column(
             origin[0] + col_idx,
             origin[0] + col_idx,
-            int(estimated_width)
+            int(estimated_width),
         )
 
     if component.header_filters:

@@ -198,7 +198,7 @@ def merged_cols():
                     header_style=centered_style,
                     column_style=centered_style,
                     header_filters=False,
-                    merge_equal_headers=False,
+                    # merge_equal_headers=False,
                 )
             ],
             grid_lines=False,
