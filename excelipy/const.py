@@ -1,3 +1,17 @@
+def python_to_excel_fmt(fmt: str) -> str:
+    fmt = fmt.strip()
+    if fmt.endswith("%"):
+        decimals = int(fmt.strip("%").lstrip(".") or 0)
+        return f"0.{decimals * '0'}%" if decimals > 0 else "0%"
+    if "," in fmt and "f" in fmt:
+        decimals = int(fmt.split(".")[-1].rstrip("f") or 0)
+        return f"#,##0.{decimals * '0'}" if decimals > 0 else "#,##0"
+    if "f" in fmt:
+        decimals = int(fmt.split(".")[-1].rstrip("f") or 0)
+        return f"0.{decimals * '0'}" if decimals > 0 else "0"
+    return "General"
+
+
 PROP_MAP = dict(
     align="align",
     valign="valign",
@@ -12,4 +26,9 @@ PROP_MAP = dict(
     border_bottom="bottom",
     border_color="border_color",
     background="bg_color",
+    numeric_format="num_format",
+)
+
+PRE_PROCESS_MAP = dict(
+    numeric_format=python_to_excel_fmt,
 )

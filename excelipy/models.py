@@ -47,6 +47,7 @@ class Style(BaseModel):
     border_color: Optional[str] = Field(default=None)
     background: Optional[str] = Field(default=None)
     text_wrap: Optional[bool] = Field(default=None)
+    numeric_format: Optional[str] = Field(default=None)
 
     def merge(self, other: "Style") -> "Style":
         self_dict = self.model_dump(exclude_none=True)

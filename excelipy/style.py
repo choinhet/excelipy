@@ -2,17 +2,18 @@ from typing import Sequence
 
 from xlsxwriter.workbook import Format, Workbook
 
-from excelipy.const import PROP_MAP
+from excelipy.const import PROP_MAP, PRE_PROCESS_MAP
 from excelipy.models import Style
 
 
 def _process_single(workbook: Workbook, style: Style) -> Format:
     style_dict = style.model_dump(exclude_none=True)
-    style_map = {
-        mapped_prop: value
-        for prop, value in style_dict.items()
-        if (mapped_prop := PROP_MAP.get(prop)) is not None
-    }
+    style_map = {}
+    for prop, value in style_dict.items():
+        if (mapped_prop := PROP_MAP.get(prop)) is not None:
+            if prop in PRE_PROCESS_MAP:
+                value = PRE_PROCESS_MAP[prop](value)
+            style_map[mapped_prop] = value
     return workbook.add_format(style_map)
 
 

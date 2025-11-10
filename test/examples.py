@@ -15,6 +15,17 @@ def df() -> pd.DataFrame:
     )
 
 
+def numeric_df() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "integers": [1, 2, 3],
+            "floats": [1.2, 2.3, 3.1],
+            "big_numbers": [100000000, 2001230, 120392222],
+            "percents": [0.2129, 0.522, 1.11],
+        }
+    )
+
+
 def df2() -> pd.DataFrame:
     return pd.DataFrame(
         {
@@ -214,6 +225,42 @@ def merged_cols():
     ep.save(excel)
 
 
+def dataframe_formatting():
+    df = numeric_df()
+    formats = {
+        "integers": ".0f",
+        "floats": ".2f",
+        "big_numbers": ",.1f",
+        "percents": ".1%",
+    }
+    # for col, f in formats.items():
+    #     df[col] = df[col].apply(lambda x: format(x, f))
+
+    sheets = [
+        ep.Sheet(
+            name="Hello!",
+            components=[
+                ep.Table(
+                    data=df,
+                    default_style=False,
+                    header_filters=False,
+                    column_style={
+                        col: ep.Style(numeric_format=formats.get(col))
+                        for col in df.columns
+                    }
+                ),
+            ],
+        ),
+    ]
+
+    excel = ep.Excel(
+        path=Path("filename.xlsx"),
+        sheets=sheets,
+    )
+
+    ep.save(excel)
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
-    merged_cols()
+    dataframe_formatting()
