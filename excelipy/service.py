@@ -41,7 +41,9 @@ def write_component(
 
 
 def save(excel: Excel):
-    with xlsxwriter.Workbook(excel.path) as workbook:
+    with xlsxwriter.Workbook(excel.path, {
+        "nan_inf_to_errors": excel.nan_inf_to_errors,
+    }) as workbook:
         for sheet in excel.sheets:
             origin = (
                 sheet.style.pl(),

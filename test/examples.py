@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 import excelipy as ep
@@ -18,10 +19,11 @@ def df() -> pd.DataFrame:
 def numeric_df() -> pd.DataFrame:
     return pd.DataFrame(
         {
-            "integers": [1, 2, 3],
+            "integers": [0, 2, 3],
+            "invalid": [1, 2, 3],
             "floats": [1.2, 2.3, 3.1],
-            "big_numbers": [100000000, 2001230, 120392222],
-            "percents": [0.2129, 0.522, 1.11],
+            "big_numbers": [100000000, 2001230, np.inf],
+            "percents": [0.2129, np.nan, 1.11],
         }
     )
 
@@ -245,7 +247,13 @@ def dataframe_formatting():
                     default_style=False,
                     header_filters=False,
                     column_style={
-                        col: ep.Style(numeric_format=formats.get(col))
+                        col: ep.Style(
+                            numeric_format=formats.get(col),
+                            align="center",
+                            fill_inf="-",
+                            fill_na="-",
+                            fill_zero="-",
+                        )
                         for col in df.columns
                     }
                 ),

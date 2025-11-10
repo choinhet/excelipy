@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, Optional, Sequence, Literal
+from typing import Dict, Optional, Sequence, Literal, Any
 
 import pandas as pd
 from pydantic import BaseModel, Field
@@ -48,6 +48,9 @@ class Style(BaseModel):
     background: Optional[str] = Field(default=None)
     text_wrap: Optional[bool] = Field(default=None)
     numeric_format: Optional[str] = Field(default=None)
+    fill_na: Optional[Any] = Field(default=None)
+    fill_inf: Optional[Any] = Field(default=None)
+    fill_zero: Optional[str] = Field(default=None)
 
     def merge(self, other: "Style") -> "Style":
         self_dict = self.model_dump(exclude_none=True)
@@ -136,3 +139,4 @@ class Sheet(BaseModel):
 class Excel(BaseModel):
     path: Path
     sheets: Sequence[Sheet] = Field(default_factory=list)
+    nan_inf_to_errors: bool = Field(default=True)

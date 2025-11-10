@@ -2,6 +2,7 @@ import logging
 from collections import defaultdict
 from typing import Tuple, Dict, Optional
 
+import numpy as np
 import pandas as pd
 from PIL import ImageFont
 from xlsxwriter.workbook import Workbook, Worksheet
@@ -211,8 +212,25 @@ def write_table(
             if component.default_style:
                 body_style = [DEFAULT_BODY_STYLE] + body_style
 
-            current_format = process_style(workbook, body_style)
+            merged_style = Style()
+            body_style = list(filter(None, body_style))
+            for style in body_style:
+                merged_style = merged_style.merge(style)
+
             cell = row.iloc[col_idx]
+            if merged_style.fill_na is not None and pd.isna(cell):
+                cell = merged_style.fill_na
+                merged_style = merged_style.model_copy(update=dict(numeric_format=None))
+
+            if merged_style.fill_zero is not None and cell == 0:
+                cell = merged_style.fill_zero
+                merged_style = merged_style.model_copy(update=dict(numeric_format=None))
+
+            if merged_style.fill_inf is not None and cell in (np.inf, -np.inf):
+                cell = merged_style.fill_inf
+                merged_style = merged_style.model_copy(update=dict(numeric_format=None))
+
+            current_format = process_style(workbook, [merged_style])
             worksheet.write(
                 origin[1] + row_idx + 1,
                 origin[0] + col_idx,
