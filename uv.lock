@@ -1,5 +1,4 @@
 version = 1
-revision = 1
 requires-python = ">=3.9.10"
 resolution-markers = [
     "python_full_version < '3.11'",
@@ -131,7 +130,7 @@ wheels = [
 
 [[package]]
 name = "excelipy"
-version = "0.1.20"
+version = "0.1.22"
 source = { virtual = "." }
 dependencies = [
     { name = "numpy", version = "2.0.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },

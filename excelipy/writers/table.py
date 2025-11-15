@@ -53,7 +53,8 @@ def get_style_font_size(*styles: Style) -> Optional[int]:
 
 
 def get_auto_width(
-        header: str,
+        cur_col: str,
+        col_idx: int,
         data: pd.Series,
         component: Table,
         cur_skip: bool,
@@ -62,19 +63,19 @@ def get_auto_width(
     header_font_size = get_style_font_size(
         DEFAULT_HEADER_STYLE,
         component.style,
-        component.header_style.get(header),
+        component.header_style.get(cur_col),
     )
     header_font_family = get_style_font_family(
         DEFAULT_HEADER_STYLE,
         component.style,
-        component.header_style.get(header),
+        component.header_style.get(cur_col),
     )
     header_len = get_text_size(
-        header,
+        cur_col,
         header_font_size,
         header_font_family,
     )
-    cells_for_header = len([it for it in component.data.columns if it == header])
+    cells_for_header = len([it for it in component.data.columns if it == cur_col])
 
     if cur_skip:
         header_len /= cells_for_header
@@ -83,13 +84,13 @@ def get_auto_width(
         default_style,
         component.style,
         component.body_style,
-        component.column_style.get(header),
+        component.idx_column_style.get(col_idx, Style()).merge(component.column_style.get(cur_col, Style())),
     )
     col_font_family = get_style_font_family(
         default_style,
         component.style,
         component.body_style,
-        component.column_style.get(header),
+        component.idx_column_style.get(col_idx, Style()).merge(component.column_style.get(cur_col, Style())),
     )
     all_col_len = data.apply(str).apply(
         lambda it: get_text_size(
@@ -121,15 +122,15 @@ def write_table(
 
     idx_by_header = defaultdict(list)
     if component.merge_equal_headers:
-        for idx, header in enumerate(component.data.columns):
-            past_idx = idx_by_header.get(header, [idx - 1])[-1]
+        for idx, cur_col in enumerate(component.data.columns):
+            past_idx = idx_by_header.get(cur_col, [idx - 1])[-1]
             if idx == past_idx + 1:
-                idx_by_header[header].append(idx)
+                idx_by_header[cur_col].append(idx)
         idx_by_header = {k: v for k, v in idx_by_header.items() if len(v) >= 2}
 
-    for col_idx, header in enumerate(component.data.columns):
+    for col_idx, cur_col in enumerate(component.data.columns):
         current_header_style = component.header_style.get(
-            header,
+            cur_col,
             component.style,
         )
         header_styles = [default_style, current_header_style]
@@ -138,7 +139,7 @@ def write_table(
             header_styles = [DEFAULT_HEADER_STYLE] + header_styles
 
         header_format = process_style(workbook, header_styles)
-        header_write_skip = idx_by_header.get(header, [])
+        header_write_skip = idx_by_header.get(cur_col, [])
         is_first = False
         cur_skip = col_idx in header_write_skip and not (
             is_first := col_idx == header_write_skip[0]
@@ -158,17 +159,18 @@ def write_table(
         worksheet.write(
             origin[1],
             origin[0] + col_idx,
-            header if not cur_skip else "",
+            cur_col if not cur_skip else "",
             header_format,
         )
 
-        set_width = component.column_width.get(header)
+        set_width = component.idx_column_width.get(col_idx) or component.column_width.get(cur_col)
         if set_width:
             estimated_width = set_width
         else:
             data = component.data.iloc[:, col_idx]
             estimated_width = get_auto_width(
-                header,
+                cur_col,
+                col_idx,
                 data,
                 component,
                 cur_skip,
@@ -181,7 +183,7 @@ def write_table(
             col_size_cache_by_sheet[worksheet.name] = col_size_cache
 
         log.debug(
-            f"Estimated width for {header}: {estimated_width} [Sheet: {worksheet.name}]",
+            f"Estimated width for {cur_col}: {estimated_width} [Sheet: {worksheet.name}]",
         )
         worksheet.set_column(
             origin[0] + col_idx,
@@ -198,7 +200,7 @@ def write_table(
         )
 
     for col_idx, col in enumerate(component.data.columns):
-        col_style = component.column_style.get(col)
+        col_style = component.idx_column_style.get(col_idx, Style()).merge(component.column_style.get(col, Style()))
         for row_idx, (_, row) in enumerate(component.data.iterrows()):
             row_style = component.row_style.get(row_idx)
             body_style = [

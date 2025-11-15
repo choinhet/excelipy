@@ -7,7 +7,7 @@ import pandas as pd
 import excelipy as ep
 
 
-def df() -> pd.DataFrame:
+def simple_df() -> pd.DataFrame:
     return pd.DataFrame(
         {
             "testing": [1, 2, 3],
@@ -65,7 +65,7 @@ def simple_example():
             components=[
                 ep.Text(text="Hello world!", width=2),
                 ep.Fill(width=2, style=ep.Style(background="#33c481")),
-                ep.Table(data=df()),
+                ep.Table(data=simple_df()),
             ],
             style=ep.Style(padding=1),
             grid_lines=False,
@@ -85,7 +85,7 @@ def one_table():
         ep.Sheet(
             name="Hello!",
             components=[
-                ep.Table(data=df())
+                ep.Table(data=simple_df())
             ],
         ),
     ]
@@ -107,14 +107,14 @@ def two_tables():
                     data=df2(),
                     style=ep.Style(padding_bottom=1, font_size=20)
                 ),
-                ep.Table(data=df()),
+                ep.Table(data=simple_df()),
             ],
         ),
         ep.Sheet(
             name="Hello again!",
             components=[
-                ep.Table(data=df(), style=ep.Style(padding_bottom=1)),
-                ep.Table(data=df()),
+                ep.Table(data=simple_df(), style=ep.Style(padding_bottom=1)),
+                ep.Table(data=simple_df()),
             ],
         ),
     ]
@@ -155,7 +155,7 @@ def one_table_no_grid():
         ep.Sheet(
             name="Hello!",
             components=[
-                ep.Table(data=df())
+                ep.Table(data=simple_df())
             ],
             grid_lines=False,
             style=ep.Style(padding=1),
@@ -179,7 +179,7 @@ def default_text_style():
                     text="Hello world! This text should be bigger than the table",
                     width=2,
                 ),
-                ep.Table(data=df())
+                ep.Table(data=simple_df())
             ],
             grid_lines=False,
             style=ep.Style(padding=1),
@@ -269,6 +269,53 @@ def dataframe_formatting():
     ep.save(excel)
 
 
+def merged_cols_formatting():
+    df = duplicated_col_df()
+
+    formatting = {
+        1: ".2%",
+        2: ".2f",
+    }
+
+    centered_style = {
+        col: ep.Style(
+            align="center",
+            valign="vcenter",
+            numeric_format=formatting.get(idx),
+        ) for idx, col in enumerate(df.columns)
+    }
+    col_style = {
+        idx: ep.Style(
+            align="center",
+            valign="vcenter",
+            numeric_format=formatting.get(idx),
+        ) for idx, col in enumerate(df.columns)
+    }
+
+    sheets = [
+        ep.Sheet(
+            name="Hello!",
+            components=[
+                ep.Table(
+                    data=df,
+                    header_style=centered_style,
+                    idx_column_style=col_style,
+                    header_filters=False,
+                )
+            ],
+            grid_lines=False,
+            style=ep.Style(padding=1),
+        ),
+    ]
+
+    excel = ep.Excel(
+        path=Path("filename.xlsx"),
+        sheets=sheets,
+    )
+
+    ep.save(excel)
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
-    dataframe_formatting()
+    merged_cols_formatting()
