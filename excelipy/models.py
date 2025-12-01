@@ -1,5 +1,6 @@
+import io
 from pathlib import Path
-from typing import Dict, Optional, Sequence, Literal, Any
+from typing import Dict, Optional, Sequence, Literal, Any, Union
 
 import pandas as pd
 from pydantic import BaseModel, Field
@@ -139,6 +140,6 @@ class Sheet(BaseModel):
 
 
 class Excel(BaseModel):
-    path: Path
+    path: Union[Path, io.BytesIO]
     sheets: Sequence[Sheet] = Field(default_factory=list)
     nan_inf_to_errors: bool = Field(default=True)
