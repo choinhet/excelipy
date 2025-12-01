@@ -140,6 +140,9 @@ class Sheet(BaseModel):
 
 
 class Excel(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
+
     path: Union[Path, io.BytesIO]
     sheets: Sequence[Sheet] = Field(default_factory=list)
     nan_inf_to_errors: bool = Field(default=True)
