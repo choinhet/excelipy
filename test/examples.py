@@ -316,6 +316,29 @@ def merged_cols_formatting():
     ep.save(excel)
 
 
+def large_width_no_merge():
+    style = ep.Style(background="#33c481")
+    sheets = [
+        ep.Sheet(
+            name="Hello!",
+            components=[
+                ep.Text(text="Hello", width=10, style=style),
+                ep.Text(text="Hello", width=10, style=style, merged=False),
+                ep.Fill(width=10, style=style),
+                ep.Fill(width=10, style=style, merged=False),
+            ],
+            grid_lines=False,
+        ),
+    ]
+
+    excel = ep.Excel(
+        path=Path("filename.xlsx"),
+        sheets=sheets,
+    )
+
+    ep.save(excel)
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
-    merged_cols_formatting()
+    large_width_no_merge()

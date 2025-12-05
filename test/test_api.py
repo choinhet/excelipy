@@ -63,6 +63,7 @@ def test_api(
         "percents": ".1%",
         "invalid": "invalid",
     }
+    style = ep.Style(background="#33c481")
     sheets = [
         ep.Sheet(
             name="Hello!",
@@ -128,6 +129,10 @@ def test_api(
                         for col in numeric_df.columns
                     }
                 ),
+                ep.Text(text="Hello", width=10, style=style),
+                ep.Text(text="Hello", width=10, style=style, merged=False),
+                ep.Fill(width=10, style=style),
+                ep.Fill(width=10, style=style, merged=False),
             ],
             style=ep.Style(
                 font_size=14,

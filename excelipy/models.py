@@ -83,11 +83,13 @@ class Text(Component):
     text: str
     width: int = Field(default=1)
     height: int = Field(default=1)
+    merged: bool = Field(default=True)
 
 
 class Fill(Component):
     width: int = Field(default=1)
     height: int = Field(default=1)
+    merged: bool = Field(default=True)
 
 
 class Image(Component):
