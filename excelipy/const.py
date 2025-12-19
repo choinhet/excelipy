@@ -27,6 +27,7 @@ PROP_MAP = dict(
     border_color="border_color",
     background="bg_color",
     numeric_format="num_format",
+    underline="underline",
 )
 
 PRE_PROCESS_MAP = dict(

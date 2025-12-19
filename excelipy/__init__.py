@@ -4,6 +4,7 @@ __all__ = [
     "Fill",
     "Image",
     "Text",
+    "Link",
     "Table",
     "Sheet",
     "Excel",
@@ -19,6 +20,7 @@ from excelipy.models import (
     Table,
     Sheet,
     Excel,
+    Link,
 )
 
 from excelipy.service import save

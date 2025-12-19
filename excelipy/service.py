@@ -1,15 +1,15 @@
 import logging
-from typing import Tuple
+from typing import Tuple, Dict, Callable
 
 import xlsxwriter
 from xlsxwriter.workbook import Workbook, Worksheet
 
-from excelipy.models import Component, Excel, Fill, Style, Table, Text, Image
+from excelipy.models import Component, Excel, Fill, Style, Table, Text, Image, Link
 from excelipy.writers import (
     write_fill,
     write_table,
     write_text,
-    write_image,
+    write_image, write_link,
 )
 
 log = logging.getLogger("excelipy")
@@ -22,9 +22,13 @@ def write_component(
         default_style: Style,
         origin: Tuple[int, int] = (0, 0),
 ) -> Tuple[int, int]:
-    writing_map = {
+    writing_map: Dict[
+        Callable[..., Component],
+        Callable[..., Tuple[int, int]]
+    ] = {
         Table: write_table,
         Text: write_text,
+        Link: write_link,
         Fill: write_fill,
         Image: write_image,
     }

@@ -39,13 +39,7 @@ def write_image(
         origin[1] + component.height - 1,
         origin[0] + component.width - 1,
         "",
-        process_style(
-            workbook,
-            [
-                default_style,
-                component.style,
-            ],
-        ),
+        process_style(workbook, [default_style, component.style]),
     )
 
     worksheet.insert_image(

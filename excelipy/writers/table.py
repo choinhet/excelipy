@@ -113,7 +113,7 @@ def write_table(
         origin: Tuple[int, int] = (0, 0),
 ) -> Tuple[int, int]:
     x_size = component.data.shape[1]
-    y_size = component.data.shape[0] + 1  # +1 for header row
+    y_size = component.data.shape[0] + 1  # +1 for the header row
 
     col_size_cache_by_sheet = getattr(workbook, "_excelipy_col_size_cache", None)
     if col_size_cache_by_sheet is None:

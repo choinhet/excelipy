@@ -10,48 +10,30 @@ class Style(BaseModel):
     class Config:
         frozen = True
 
-    align: Optional[
-        Literal[
-            "left",
-            "center",
-            "right",
-            "fill",
-            "justify",
-            "center_across",
-            "distributed",
-        ]
-    ] = Field(default=None)
-    valign: Optional[
-        Literal[
-            "top",
-            "vcenter",
-            "bottom",
-            "vcenter",
-            "bottom",
-            "vjustify",
-        ]
-    ] = Field(default=None)
-    padding: Optional[int] = Field(default=None)
-    padding_left: Optional[int] = Field(default=None)
-    padding_right: Optional[int] = Field(default=None)
-    padding_top: Optional[int] = Field(default=None)
-    padding_bottom: Optional[int] = Field(default=None)
-    font_size: Optional[int] = Field(default=None)
-    font_color: Optional[str] = Field(default=None)
-    font_family: Optional[str] = Field(default=None)
+    align: Optional[Literal["left", "center", "right", "fill", "justify", "center_across", "distributed"]] = Field(default=None)
+    background: Optional[str] = Field(default=None)
     bold: Optional[bool] = Field(default=None)
     border: Optional[int] = Field(default=None)
+    border_bottom: Optional[int] = Field(default=None)
+    border_color: Optional[str] = Field(default=None)
     border_left: Optional[int] = Field(default=None)
     border_right: Optional[int] = Field(default=None)
     border_top: Optional[int] = Field(default=None)
-    border_bottom: Optional[int] = Field(default=None)
-    border_color: Optional[str] = Field(default=None)
-    background: Optional[str] = Field(default=None)
-    text_wrap: Optional[bool] = Field(default=None)
-    numeric_format: Optional[str] = Field(default=None)
-    fill_na: Optional[Any] = Field(default=None)
     fill_inf: Optional[Any] = Field(default=None)
+    fill_na: Optional[Any] = Field(default=None)
     fill_zero: Optional[str] = Field(default=None)
+    font_color: Optional[str] = Field(default=None)
+    font_family: Optional[str] = Field(default=None)
+    font_size: Optional[int] = Field(default=None)
+    numeric_format: Optional[str] = Field(default=None)
+    padding: Optional[int] = Field(default=None)
+    padding_bottom: Optional[int] = Field(default=None)
+    padding_left: Optional[int] = Field(default=None)
+    padding_right: Optional[int] = Field(default=None)
+    padding_top: Optional[int] = Field(default=None)
+    text_wrap: Optional[bool] = Field(default=None)
+    underline: Optional[Literal[1, 2, 33, 34]] = Field(default=None)
+    valign: Optional[Literal["top", "vcenter", "bottom", "vcenter", "bottom", "vjustify"]] = Field(default=None)
 
     def merge(self, other: "Style") -> "Style":
         self_dict = self.model_dump(exclude_none=True)
@@ -81,6 +63,14 @@ class Component(BaseModel):
 
 class Text(Component):
     text: str
+    width: int = Field(default=1)
+    height: int = Field(default=1)
+    merged: bool = Field(default=True)
+
+
+class Link(Component):
+    text: str
+    url: str
     width: int = Field(default=1)
     height: int = Field(default=1)
     merged: bool = Field(default=True)

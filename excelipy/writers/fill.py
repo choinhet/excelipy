@@ -18,27 +18,13 @@ def write_fill(
 ) -> Tuple[int, int]:
     log.debug(f"Writing fill at {origin}")
 
-    style = process_style(
-        workbook,
-        [
-            default_style,
-            component.style,
-        ],
-    )
-
+    style = process_style(workbook, [default_style, component.style])
     col0, row0 = origin
     width = component.width
     height = component.height
 
     if component.merged and (width > 1 or height > 1):
-        worksheet.merge_range(
-            row0,
-            col0,
-            row0 + height - 1,
-            col0 + width - 1,
-            "",
-            style,
-        )
+        worksheet.merge_range(row0, col0, row0 + height - 1, col0 + width - 1, "", style)
     else:
         for dy in range(height):
             for dx in range(width):

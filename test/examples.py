@@ -84,9 +84,7 @@ def one_table():
     sheets = [
         ep.Sheet(
             name="Hello!",
-            components=[
-                ep.Table(data=simple_df())
-            ],
+            components=[ep.Table(data=simple_df())],
         ),
     ]
 
@@ -103,10 +101,7 @@ def two_tables():
         ep.Sheet(
             name="Hello!",
             components=[
-                ep.Table(
-                    data=df2(),
-                    style=ep.Style(padding_bottom=1, font_size=20)
-                ),
+                ep.Table(data=df2(), style=ep.Style(padding_bottom=1, font_size=20)),
                 ep.Table(data=simple_df()),
             ],
         ),
@@ -154,9 +149,7 @@ def one_table_no_grid():
     sheets = [
         ep.Sheet(
             name="Hello!",
-            components=[
-                ep.Table(data=simple_df())
-            ],
+            components=[ep.Table(data=simple_df())],
             grid_lines=False,
             style=ep.Style(padding=1),
         ),
@@ -179,7 +172,7 @@ def default_text_style():
                     text="Hello world! This text should be bigger than the table",
                     width=2,
                 ),
-                ep.Table(data=simple_df())
+                ep.Table(data=simple_df()),
             ],
             grid_lines=False,
             style=ep.Style(padding=1),
@@ -197,10 +190,7 @@ def default_text_style():
 def merged_cols():
     df = duplicated_col_df()
     centered_style = {
-        col: ep.Style(
-            align="center",
-            valign="vcenter"
-        ) for col in df.columns
+        col: ep.Style(align="center", valign="vcenter") for col in df.columns
     }
     sheets = [
         ep.Sheet(
@@ -255,7 +245,7 @@ def dataframe_formatting():
                             fill_zero="-",
                         )
                         for col in df.columns
-                    }
+                    },
                 ),
             ],
         ),
@@ -282,14 +272,16 @@ def merged_cols_formatting():
             align="center",
             valign="vcenter",
             numeric_format=formatting.get(idx),
-        ) for idx, col in enumerate(df.columns)
+        )
+        for idx, col in enumerate(df.columns)
     }
     col_style = {
         idx: ep.Style(
             align="center",
             valign="vcenter",
             numeric_format=formatting.get(idx),
-        ) for idx, col in enumerate(df.columns)
+        )
+        for idx, col in enumerate(df.columns)
     }
 
     sheets = [
@@ -339,6 +331,36 @@ def large_width_no_merge():
     ep.save(excel)
 
 
+def link_testing():
+    style = ep.Style(background="#33c481")
+    ep.save(
+        ep.Excel(
+            path=Path("filename.xlsx"),
+            sheets=[
+                ep.Sheet(
+                    name="Hello!",
+                    components=[
+                        ep.Link(text="Hello", url="https://www.google.com"),
+                        ep.Link(
+                            text="Hello",
+                            url="https://www.google.com",
+                            width=2,
+                            style=style,
+                        ),
+                        ep.Link(
+                            text="Hello",
+                            url="https://www.google.com",
+                            width=2,
+                            merged=False,
+                            style=style,
+                        ),
+                    ],
+                ),
+            ],
+        )
+    )
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
-    large_width_no_merge()
+    link_testing()
