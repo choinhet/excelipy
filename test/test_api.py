@@ -24,6 +24,7 @@ def sample_df() -> pd.DataFrame:
     return pd.DataFrame(
         {
             "testing": [1, 2, 3],
+            "testing2": [1, 2, 3],
             "tested": ["Yay", "Thanks", "Bud"],
         }
     )
@@ -56,6 +57,20 @@ def test_api(
         img_path: Path,
         numeric_df: pd.DataFrame,
 ):
+    def get_match_style(result: int) -> ep.Style:
+        return (
+            ep.Style(
+                background="#00ff1e",
+                font_color="#ffffff",
+                bold=True,
+            )
+            if result == 1
+            else ep.Style(
+                background="#ff0013",
+                font_color="#ffffff",
+                bold=True,
+            )
+        )
     numeric_formats = {
         "integers": ".0f",
         "floats": ".2f",
@@ -96,6 +111,7 @@ def test_api(
                             align="center",
                             numeric_format=".0f",
                         ),
+                        "testing2": get_match_style,
                     },
                     column_width={
                         "tested": 20,

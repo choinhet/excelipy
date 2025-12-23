@@ -361,6 +361,49 @@ def link_testing():
     )
 
 
+def callable_column_style():
+    def get_match_style(result: int) -> ep.Style:
+        return (
+            ep.Style(
+                background="#00ff1e",
+                font_color="#ffffff",
+                bold=True,
+            )
+            if result == 1
+            else ep.Style(
+                background="#ff0013",
+                font_color="#ffffff",
+                bold=True,
+            )
+        )
+
+    sheets = [
+        ep.Sheet(
+            name="Hello!",
+            components=[
+                ep.Table(
+                    data=df2(),
+                    column_style={
+                        "testing": get_match_style,
+                    },
+                    row_style={
+                        1: ep.Style(background="#33c481"),
+                    }
+                )
+            ],
+            grid_lines=False,
+            style=ep.Style(padding=1),
+        ),
+    ]
+
+    excel = ep.Excel(
+        path=Path("filename.xlsx"),
+        sheets=sheets,
+    )
+
+    ep.save(excel)
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
-    link_testing()
+    callable_column_style()

@@ -15,6 +15,9 @@ log = logging.getLogger("excelipy")
 
 DEFAULT_FONT_SIZE = 11
 
+def _static_col_style(component: Table, col_name: str) -> Style:
+    maybe = component.column_style.get(col_name)
+    return Style() if callable(maybe) or maybe is None else maybe
 
 def get_text_size(
         text: str,
@@ -84,13 +87,13 @@ def get_auto_width(
         default_style,
         component.style,
         component.body_style,
-        component.idx_column_style.get(col_idx, Style()).merge(component.column_style.get(cur_col, Style())),
+        component.idx_column_style.get(col_idx, Style()).merge(_static_col_style(component, cur_col))
     )
     col_font_family = get_style_font_family(
         default_style,
         component.style,
         component.body_style,
-        component.idx_column_style.get(col_idx, Style()).merge(component.column_style.get(cur_col, Style())),
+        component.idx_column_style.get(col_idx, Style()).merge(_static_col_style(component, cur_col))
     )
     all_col_len = data.apply(str).apply(
         lambda it: get_text_size(
@@ -200,7 +203,7 @@ def write_table(
         )
 
     for col_idx, col in enumerate(component.data.columns):
-        col_style = component.idx_column_style.get(col_idx, Style()).merge(component.column_style.get(col, Style()))
+        col_style = component.idx_column_style.get(col_idx, Style()).merge(_static_col_style(component, col))
         for row_idx, (_, row) in enumerate(component.data.iterrows()):
             row_style = component.row_style.get(row_idx)
             body_style = [
@@ -231,6 +234,15 @@ def write_table(
             if merged_style.fill_inf is not None and cell in (np.inf, -np.inf):
                 cell = merged_style.fill_inf
                 merged_style = merged_style.model_copy(update=dict(numeric_format=None))
+
+            maybe_callable = component.column_style.get(col)
+            if callable(maybe_callable):
+                dyn_style = maybe_callable(cell)
+                if dyn_style is not None:
+                    merged_style = merged_style.merge(dyn_style)
+
+            if row_style is not None:
+                merged_style = merged_style.merge(row_style)
 
             current_format = process_style(workbook, [merged_style])
             worksheet.write(
