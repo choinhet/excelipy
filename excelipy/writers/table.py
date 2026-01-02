@@ -7,7 +7,7 @@ import pandas as pd
 from PIL import ImageFont
 from xlsxwriter.workbook import Workbook, Worksheet
 
-from excelipy.models import Style, Table
+from excelipy.models import Style, Table, Link
 from excelipy.style import process_style
 from excelipy.styles.table import DEFAULT_HEADER_STYLE, DEFAULT_BODY_STYLE
 
@@ -15,14 +15,16 @@ log = logging.getLogger("excelipy")
 
 DEFAULT_FONT_SIZE = 11
 
+
 def _static_col_style(component: Table, col_name: str) -> Style:
     maybe = component.column_style.get(col_name)
     return Style() if callable(maybe) or maybe is None else maybe
 
+
 def get_text_size(
-        text: str,
-        font_size: Optional[int] = None,
-        font_family: Optional[str] = None,
+    text: str,
+    font_size: Optional[int] = None,
+    font_family: Optional[str] = None,
 ):
     cur_font_size = font_size or DEFAULT_FONT_SIZE
     cur_font_family = font_family or "Arial"
@@ -56,12 +58,12 @@ def get_style_font_size(*styles: Style) -> Optional[int]:
 
 
 def get_auto_width(
-        cur_col: str,
-        col_idx: int,
-        data: pd.Series,
-        component: Table,
-        cur_skip: bool,
-        default_style: Style,
+    cur_col: str,
+    col_idx: int,
+    data: pd.Series,
+    component: Table,
+    cur_skip: bool,
+    default_style: Style,
 ) -> float:
     header_font_size = get_style_font_size(
         DEFAULT_HEADER_STYLE,
@@ -87,13 +89,17 @@ def get_auto_width(
         default_style,
         component.style,
         component.body_style,
-        component.idx_column_style.get(col_idx, Style()).merge(_static_col_style(component, cur_col))
+        component.idx_column_style.get(col_idx, Style()).merge(
+            _static_col_style(component, cur_col)
+        ),
     )
     col_font_family = get_style_font_family(
         default_style,
         component.style,
         component.body_style,
-        component.idx_column_style.get(col_idx, Style()).merge(_static_col_style(component, cur_col))
+        component.idx_column_style.get(col_idx, Style()).merge(
+            _static_col_style(component, cur_col)
+        ),
     )
     all_col_len = data.apply(str).apply(
         lambda it: get_text_size(
@@ -109,11 +115,11 @@ def get_auto_width(
 
 
 def write_table(
-        workbook: Workbook,
-        worksheet: Worksheet,
-        component: Table,
-        default_style: Style,
-        origin: Tuple[int, int] = (0, 0),
+    workbook: Workbook,
+    worksheet: Worksheet,
+    component: Table,
+    default_style: Style,
+    origin: Tuple[int, int] = (0, 0),
 ) -> Tuple[int, int]:
     x_size = component.data.shape[1]
     y_size = component.data.shape[0] + 1  # +1 for the header row
@@ -223,6 +229,12 @@ def write_table(
                 merged_style = merged_style.merge(style)
 
             cell = row.iloc[col_idx]
+            url = None
+
+            if isinstance(cell, Link):
+                url = cell.url
+                cell = cell.text
+
             if merged_style.fill_na is not None and pd.isna(cell):
                 cell = merged_style.fill_na
                 merged_style = merged_style.model_copy(update=dict(numeric_format=None))
@@ -245,11 +257,20 @@ def write_table(
                 merged_style = merged_style.merge(row_style)
 
             current_format = process_style(workbook, [merged_style])
-            worksheet.write(
-                origin[1] + row_idx + 1,
-                origin[0] + col_idx,
-                cell,
-                current_format,
-            )
+            if url is None:
+                worksheet.write(
+                    origin[1] + row_idx + 1,
+                    origin[0] + col_idx,
+                    cell,
+                    current_format,
+                )
+            else:
+                worksheet.write_url(
+                    origin[1] + row_idx + 1,
+                    origin[0] + col_idx,
+                    url,
+                    current_format,
+                    cell,
+                )
 
     return x_size, y_size

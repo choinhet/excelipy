@@ -57,6 +57,7 @@ def test_api(
         img_path: Path,
         numeric_df: pd.DataFrame,
 ):
+    tb = pd.DataFrame({"testing": [ep.Link(text="google", url="https://www.google.com")]})
     def get_match_style(result: int) -> ep.Style:
         return (
             ep.Style(
@@ -152,6 +153,7 @@ def test_api(
                 ep.Link(text="Hello", url="https://www.google.com", width=2, merged=False),
                 ep.Fill(width=10, style=style),
                 ep.Fill(width=10, style=style, merged=False),
+                ep.Table(data=tb),
             ],
             style=ep.Style(
                 font_size=14,

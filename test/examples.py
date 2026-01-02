@@ -388,7 +388,7 @@ def callable_column_style():
                     },
                     row_style={
                         1: ep.Style(background="#33c481"),
-                    }
+                    },
                 )
             ],
             grid_lines=False,
@@ -404,6 +404,28 @@ def callable_column_style():
     ep.save(excel)
 
 
+def link_in_table():
+    tb = pd.DataFrame({"testing": [ep.Link(text="google", url="https://www.google.com")]})
+    ep.save(
+        ep.Excel(
+            path=Path("filename.xlsx"),
+            sheets=[
+                ep.Sheet(
+                    name="Hello!",
+                    components=[
+                        ep.Table(
+                            data=tb,
+                            column_style={
+                                "testing": ep.Style(font_color="#0000ff", underline=1)
+                            },
+                        )
+                    ],
+                )
+            ],
+        )
+    )
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
-    callable_column_style()
+    link_in_table()

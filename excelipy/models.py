@@ -10,7 +10,11 @@ class Style(BaseModel):
     class Config:
         frozen = True
 
-    align: Optional[Literal["left", "center", "right", "fill", "justify", "center_across", "distributed"]] = Field(default=None)
+    align: Optional[
+        Literal[
+            "left", "center", "right", "fill", "justify", "center_across", "distributed"
+        ]
+    ] = Field(default=None)
     background: Optional[str] = Field(default=None)
     bold: Optional[bool] = Field(default=None)
     border: Optional[int] = Field(default=None)
@@ -33,7 +37,9 @@ class Style(BaseModel):
     padding_top: Optional[int] = Field(default=None)
     text_wrap: Optional[bool] = Field(default=None)
     underline: Optional[Literal[1, 2, 33, 34]] = Field(default=None)
-    valign: Optional[Literal["top", "vcenter", "bottom", "vcenter", "bottom", "vjustify"]] = Field(default=None)
+    valign: Optional[
+        Literal["top", "vcenter", "bottom", "vcenter", "bottom", "vjustify"]
+    ] = Field(default=None)
 
     def merge(self, other: "Style") -> "Style":
         self_dict = self.model_dump(exclude_none=True)
@@ -75,6 +81,9 @@ class Link(Component):
     height: int = Field(default=1)
     merged: bool = Field(default=True)
 
+    def __str__(self):
+        return self.text
+
 
 class Fill(Component):
     width: int = Field(default=1)
@@ -92,7 +101,9 @@ class Table(Component):
     data: pd.DataFrame
     header_style: Dict[str, Style] = Field(default_factory=dict)
     body_style: Style = Field(default_factory=Style)
-    column_style: Dict[str, Union[Style, Callable[[Any], Style]]] = Field(default_factory=dict)
+    column_style: Dict[str, Union[Style, Callable[[Any], Style]]] = Field(
+        default_factory=dict
+    )
     idx_column_style: Dict[int, Style] = Field(default_factory=dict)
     column_width: Dict[str, int] = Field(default_factory=dict)
     idx_column_width: Dict[int, int] = Field(default_factory=dict)
@@ -105,19 +116,19 @@ class Table(Component):
     merge_equal_headers: bool = Field(default=True)
 
     def with_stripes(
-            self,
-            color: str = "#D0D0D0",
-            pattern: Literal["even", "odd"] = "odd",
+        self,
+        color: str = "#D0D0D0",
+        pattern: Literal["even", "odd"] = "odd",
     ) -> "Table":
         return self.model_copy(
             update=dict(
                 row_style={
-                    idx: self.row_style.get(idx, Style()).merge(
-                        Style(background=color)
+                    idx: (
+                        self.row_style.get(idx, Style()).merge(Style(background=color))
+                        if (pattern == "odd" and idx % 2 != 0)
+                        or (pattern == "even" and idx % 2 == 0)
+                        else self.row_style.get(idx, Style())
                     )
-                    if (pattern == "odd" and idx % 2 != 0)
-                       or (pattern == "even" and idx % 2 == 0)
-                    else self.row_style.get(idx, Style())
                     for idx in range(self.data.shape[0])
                 }
             )
