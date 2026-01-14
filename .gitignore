@@ -166,5 +166,5 @@ cython_debug/
 /logs/
 
 output.html
-*.xlsx
+filename.xlsx
 

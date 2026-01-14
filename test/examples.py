@@ -1,431 +1,401 @@
 import logging
+from importlib.resources import files
 from pathlib import Path
 
-import numpy as np
+import duckdb
+import excel2img
 import pandas as pd
+from matplotlib import pyplot as plt
+from matplotlib.colors import rgb2hex, to_rgb
 
 import excelipy as ep
+from test import resources
+
+RESOURCES = Path(str(files(resources)))
+log = logging.getLogger("excelipy")
+EXAMPLES = []
 
 
-def simple_df() -> pd.DataFrame:
-    return pd.DataFrame(
-        {
-            "testing": [1, 2, 3],
-            "tested": ["Yay", "Thanks", "Bud"],
-        }
+def example(func):
+    EXAMPLES.append(func)
+    return func
+
+
+def query(sql: str) -> pd.DataFrame:
+    con = duckdb.connect()
+    return con.query(sql).df()
+
+
+def choose_font_color(background_color: str, threshold: int = 0.5) -> str:
+    def get_luminance(rgb_color):
+        r, g, b = rgb_color
+        luminance = 0.299 * r + 0.587 * g + 0.114 * b
+        return luminance
+
+    rgb_tuple = to_rgb(background_color)
+    luminance = get_luminance(rgb_tuple)
+    if luminance < threshold:
+        return "#ffffff"
+    return "#000000"
+
+
+@example
+def displaying_a_table(out_path: Path):
+    df = query(
+        """
+        select
+            ProductName as Product,
+            sum(Value) as Value
+        from 'test/resources/samples/sales.parquet'
+        group by 1
+        order by 2 desc
+    """
     )
 
-
-def numeric_df() -> pd.DataFrame:
-    return pd.DataFrame(
-        {
-            "integers": [0, 2, 3],
-            "invalid": [1, 2, 3],
-            "floats": [1.2, 2.3, 3.1],
-            "big_numbers": [100000000, 2001230, np.inf],
-            "percents": [0.2129, np.nan, 1.11],
-        }
-    )
-
-
-def df2() -> pd.DataFrame:
-    return pd.DataFrame(
-        {
-            "testing": [1, 2, 3],
-            "tested": [
-                "Yayyyyyyyyyyyyyyyyyyyyyyyyy this is a long phrase",
-                "Thanks a lot",
-                "Bud",
-            ],
-        }
-    )
-
-
-def duplicated_col_df() -> pd.DataFrame:
-    title = "this is a long long long long long title"
-    df = pd.DataFrame(
-        {
-            title: [
-                "Yayyyyyyyyyyyyyyyyyyyyyyyyy this is a long phrase",
-                "Thanks a lot",
-                "Bud",
-            ],
-            # "bogus": [1, 2, 3],
-            "testing": [1, 2, 3],
-            "testing2": [10, 20, 30],
-        }
-    )
-    return df.rename(columns={"testing": title, "testing2": title})
-
-
-def simple_example():
-    sheets = [
-        ep.Sheet(
-            name="Hello!",
-            components=[
-                ep.Text(text="Hello world!", width=2),
-                ep.Fill(width=2, style=ep.Style(background="#33c481")),
-                ep.Table(data=simple_df()),
-            ],
-            style=ep.Style(padding=1),
-            grid_lines=False,
-        ),
-    ]
-
-    excel = ep.Excel(
-        path=Path("filename.xlsx"),
-        sheets=sheets,
-    )
-
-    ep.save(excel)
-
-
-def one_table():
-    sheets = [
-        ep.Sheet(
-            name="Hello!",
-            components=[ep.Table(data=simple_df())],
-        ),
-    ]
-
-    excel = ep.Excel(
-        path=Path("filename.xlsx"),
-        sheets=sheets,
-    )
-
-    ep.save(excel)
-
-
-def two_tables():
-    sheets = [
-        ep.Sheet(
-            name="Hello!",
-            components=[
-                ep.Table(data=df2(), style=ep.Style(padding_bottom=1, font_size=20)),
-                ep.Table(data=simple_df()),
-            ],
-        ),
-        ep.Sheet(
-            name="Hello again!",
-            components=[
-                ep.Table(data=simple_df(), style=ep.Style(padding_bottom=1)),
-                ep.Table(data=simple_df()),
-            ],
-        ),
-    ]
-
-    excel = ep.Excel(
-        path=Path("filename.xlsx"),
-        sheets=sheets,
-    )
-
-    ep.save(excel)
-
-
-def simple_image():
-    sheets = [
-        ep.Sheet(
-            name="Hello!",
-            components=[
-                ep.Image(
-                    path=Path("resources/img.png"),
-                    width=2,
-                    height=5,
-                    style=ep.Style(border=2),
-                ),
-            ],
-        ),
-    ]
-
-    excel = ep.Excel(
-        path=Path("filename.xlsx"),
-        sheets=sheets,
-    )
-
-    ep.save(excel)
-
-
-def one_table_no_grid():
-    sheets = [
-        ep.Sheet(
-            name="Hello!",
-            components=[ep.Table(data=simple_df())],
-            grid_lines=False,
-            style=ep.Style(padding=1),
-        ),
-    ]
-
-    excel = ep.Excel(
-        path=Path("filename.xlsx"),
-        sheets=sheets,
-    )
-
-    ep.save(excel)
-
-
-def default_text_style():
-    sheets = [
-        ep.Sheet(
-            name="Hello!",
-            components=[
-                ep.Text(
-                    text="Hello world! This text should be bigger than the table",
-                    width=2,
-                ),
-                ep.Table(data=simple_df()),
-            ],
-            grid_lines=False,
-            style=ep.Style(padding=1),
-        ),
-    ]
-
-    excel = ep.Excel(
-        path=Path("filename.xlsx"),
-        sheets=sheets,
-    )
-
-    ep.save(excel)
-
-
-def merged_cols():
-    df = duplicated_col_df()
-    centered_style = {
-        col: ep.Style(align="center", valign="vcenter") for col in df.columns
-    }
-    sheets = [
-        ep.Sheet(
-            name="Hello!",
-            components=[
-                ep.Table(
-                    data=df,
-                    header_style=centered_style,
-                    column_style=centered_style,
-                    header_filters=False,
-                    # merge_equal_headers=False,
-                )
-            ],
-            grid_lines=False,
-            style=ep.Style(padding=1),
-        ),
-    ]
-
-    excel = ep.Excel(
-        path=Path("filename.xlsx"),
-        sheets=sheets,
-    )
-
-    ep.save(excel)
-
-
-def dataframe_formatting():
-    df = numeric_df()
-    formats = {
-        "integers": ".0f",
-        "floats": ".2f",
-        "big_numbers": ",.1f",
-        "percents": ".1%",
-    }
-    # for col, f in formats.items():
-    #     df[col] = df[col].apply(lambda x: format(x, f))
-
-    sheets = [
-        ep.Sheet(
-            name="Hello!",
-            components=[
-                ep.Table(
-                    data=df,
-                    default_style=False,
-                    header_filters=False,
-                    column_style={
-                        col: ep.Style(
-                            numeric_format=formats.get(col),
-                            align="center",
-                            fill_inf="-",
-                            fill_na="-",
-                            fill_zero="-",
-                        )
-                        for col in df.columns
-                    },
-                ),
-            ],
-        ),
-    ]
-
-    excel = ep.Excel(
-        path=Path("filename.xlsx"),
-        sheets=sheets,
-    )
-
-    ep.save(excel)
-
-
-def merged_cols_formatting():
-    df = duplicated_col_df()
-
-    formatting = {
-        1: ".2%",
-        2: ".2f",
-    }
-
-    centered_style = {
-        col: ep.Style(
-            align="center",
-            valign="vcenter",
-            numeric_format=formatting.get(idx),
-        )
-        for idx, col in enumerate(df.columns)
-    }
-    col_style = {
-        idx: ep.Style(
-            align="center",
-            valign="vcenter",
-            numeric_format=formatting.get(idx),
-        )
-        for idx, col in enumerate(df.columns)
-    }
-
-    sheets = [
-        ep.Sheet(
-            name="Hello!",
-            components=[
-                ep.Table(
-                    data=df,
-                    header_style=centered_style,
-                    idx_column_style=col_style,
-                    header_filters=False,
-                )
-            ],
-            grid_lines=False,
-            style=ep.Style(padding=1),
-        ),
-    ]
-
-    excel = ep.Excel(
-        path=Path("filename.xlsx"),
-        sheets=sheets,
-    )
-
-    ep.save(excel)
-
-
-def large_width_no_merge():
-    style = ep.Style(background="#33c481")
-    sheets = [
-        ep.Sheet(
-            name="Hello!",
-            components=[
-                ep.Text(text="Hello", width=10, style=style),
-                ep.Text(text="Hello", width=10, style=style, merged=False),
-                ep.Fill(width=10, style=style),
-                ep.Fill(width=10, style=style, merged=False),
-            ],
-            grid_lines=False,
-        ),
-    ]
-
-    excel = ep.Excel(
-        path=Path("filename.xlsx"),
-        sheets=sheets,
-    )
-
-    ep.save(excel)
-
-
-def link_testing():
-    style = ep.Style(background="#33c481")
     ep.save(
-        ep.Excel(
-            path=Path("filename.xlsx"),
+        excel=ep.Excel(
+            path=out_path,
+            sheets=[ep.Sheet(name="Sheet1", components=[ep.Table(data=df)])],
+        )
+    )
+
+
+@example
+def basic_column_formatting(out_path: Path):
+    df = query(
+        """
+                      select
+                          ProductName as Product,
+                          sum(Value) as Value
+                      from 'test/resources/samples/sales.parquet'
+                      group by 1
+                      order by 2 desc
+                      """
+    )
+
+    ep.save(
+        excel=ep.Excel(
+            path=out_path,
             sheets=[
                 ep.Sheet(
-                    name="Hello!",
-                    components=[
-                        ep.Link(text="Hello", url="https://www.google.com"),
-                        ep.Link(
-                            text="Hello",
-                            url="https://www.google.com",
-                            width=2,
-                            style=style,
-                        ),
-                        ep.Link(
-                            text="Hello",
-                            url="https://www.google.com",
-                            width=2,
-                            merged=False,
-                            style=style,
-                        ),
-                    ],
-                ),
-            ],
-        )
-    )
-
-
-def callable_column_style():
-    def get_match_style(result: int) -> ep.Style:
-        return (
-            ep.Style(
-                background="#00ff1e",
-                font_color="#ffffff",
-                bold=True,
-            )
-            if result == 1
-            else ep.Style(
-                background="#ff0013",
-                font_color="#ffffff",
-                bold=True,
-            )
-        )
-
-    sheets = [
-        ep.Sheet(
-            name="Hello!",
-            components=[
-                ep.Table(
-                    data=df2(),
-                    column_style={
-                        "testing": get_match_style,
-                    },
-                    row_style={
-                        1: ep.Style(background="#33c481"),
-                    },
-                )
-            ],
-            grid_lines=False,
-            style=ep.Style(padding=1),
-        ),
-    ]
-
-    excel = ep.Excel(
-        path=Path("filename.xlsx"),
-        sheets=sheets,
-    )
-
-    ep.save(excel)
-
-
-def link_in_table():
-    tb = pd.DataFrame({"testing": [ep.Link(text="google", url="https://www.google.com")]})
-    ep.save(
-        ep.Excel(
-            path=Path("filename.xlsx"),
-            sheets=[
-                ep.Sheet(
-                    name="Hello!",
+                    name="Sheet1",
                     components=[
                         ep.Table(
-                            data=tb,
-                            column_style={
-                                "testing": ep.Style(font_color="#0000ff", underline=1)
+                            data=df,
+                            header_style={
+                                col: ep.Style(
+                                    bold=True, align="center", valign="vcenter"
+                                )
+                                for col in df.columns
                             },
+                            column_style={"Value": ep.Style(numeric_format=",.2f")},
                         )
                     ],
                 )
             ],
         )
     )
+
+
+@example
+def adding_a_title(out_path: Path):
+    df = query(
+        """
+               select
+                   ProductName as Product,
+                   sum(Value) as Value
+               from 'test/resources/samples/sales.parquet'
+               group by 1
+               order by 2 desc
+               """
+    )
+
+    num_cols = len(df.columns)
+    ep.save(
+        excel=ep.Excel(
+            path=out_path,
+            sheets=[
+                ep.Sheet(
+                    name="Sheet1",
+                    components=[
+                        ep.Text(
+                            text="Sales by Product",
+                            width=num_cols,
+                            style=ep.Style(
+                                bold=True,
+                                background="#ecedef",
+                                align="center",
+                                valign="vcenter",
+                            ),
+                        ),
+                        ep.Table(
+                            data=df,
+                            header_style={
+                                col: ep.Style(
+                                    bold=True, align="center", valign="vcenter"
+                                )
+                                for col in df.columns
+                            },
+                            column_style={"Value": ep.Style(numeric_format=",.2f")},
+                        ),
+                    ],
+                )
+            ],
+        )
+    )
+
+
+@example
+def category_coloring(out_path: Path):
+    df = query(
+        """
+               select StoreName as Store,
+                      ProductName as Product,
+                      sum(Value) as Value
+               from 'test/resources/samples/sales.parquet'
+               group by 1, 2
+               order by 3 desc
+               """
+    )
+
+    unique_stores = list(df["Store"].unique())
+    base_cmap = plt.get_cmap("tab20")
+    cmap = [base_cmap(i % base_cmap.N) for i in range(len(unique_stores))]
+    store_colors = dict(zip(unique_stores, [rgb2hex(rgba) for rgba in cmap]))
+
+    def get_store_color(store: str) -> ep.Style:
+        return ep.Style(
+            background=store_colors[store],
+            font_color=choose_font_color(store_colors[store]),
+            bold=True,
+        )
+
+    num_cols = len(df.columns)
+    ep.save(
+        excel=ep.Excel(
+            path=out_path,
+            sheets=[
+                ep.Sheet(
+                    name="Sheet1",
+                    components=[
+                        ep.Text(
+                            text="Sales by Product by Store",
+                            width=num_cols,
+                            style=ep.Style(
+                                bold=True,
+                                background="#ecedef",
+                                align="center",
+                                valign="vcenter",
+                            ),
+                        ),
+                        ep.Table(
+                            data=df,
+                            header_style={
+                                col: ep.Style(
+                                    bold=True, align="center", valign="vcenter"
+                                )
+                                for col in df.columns
+                            },
+                            column_style={
+                                "Value": ep.Style(numeric_format=",.2f"),
+                                "Store": get_store_color,
+                            },
+                        ),
+                    ],
+                )
+            ],
+        )
+    )
+
+
+@example
+def merging_columns(out_path: Path):
+    df = query(
+        """
+               select StoreName as Store,
+                      ProductName as Product,
+                      sum(Value) as Value
+               from 'test/resources/samples/sales.parquet'
+               group by 1, 2
+               order by 3 desc
+               """
+    )
+
+    unique_stores = list(df["Store"].unique())
+    base_cmap = plt.get_cmap("tab20")
+    cmap = [base_cmap(i % base_cmap.N) for i in range(len(unique_stores))]
+    store_colors = dict(zip(unique_stores, [rgb2hex(rgba) for rgba in cmap]))
+
+    def get_store_color(store: str) -> ep.Style:
+        return ep.Style(
+            background=store_colors[store],
+            font_color=choose_font_color(store_colors[store]),
+            bold=True,
+        )
+
+    unified = "Sales by Product by Store"
+    df = df.rename(columns={col: unified for col in df.columns})
+
+    ep.save(
+        excel=ep.Excel(
+            path=out_path,
+            sheets=[
+                ep.Sheet(
+                    name="Sheet1",
+                    components=[
+                        ep.Table(
+                            data=df,
+                            header_style={
+                                col: ep.Style(
+                                    bold=True, align="center", valign="vcenter"
+                                )
+                                for col in df.columns
+                            },
+                            body_style=ep.Style(align="center", valign="vcenter"),
+                            idx_column_style={
+                                0: get_store_color,
+                                2: ep.Style(numeric_format=",.2f"),
+                            },
+                            header_filters=False,
+                        )
+                    ],
+                )
+            ],
+        )
+    )
+
+
+@example
+def conditional_formatting(out_path: Path):
+    df = query(
+        """
+        select StoreName as Store,
+               ProductName as Product,
+               sum(Value) as Value
+        from 'test/resources/samples/sales.parquet'
+        group by 1, 2
+        order by 3 desc
+        """
+    )
+    avg_by_product = df.groupby("Product").agg({"Value": "mean"})["Value"].to_dict()
+
+    unique_stores = list(df["Store"].unique())
+    base_cmap = plt.get_cmap("tab20")
+    cmap = [base_cmap(i % base_cmap.N) for i in range(len(unique_stores))]
+    store_colors = dict(zip(unique_stores, [rgb2hex(rgba) for rgba in cmap]))
+
+    def get_store_color(store: str) -> ep.Style:
+        return ep.Style(
+            background=store_colors[store],
+            font_color=choose_font_color(store_colors[store]),
+            bold=True,
+        )
+
+    @ep.row_wise
+    def get_value_style(row) -> ep.Style:
+        store, product, value = row
+        prod_avg = avg_by_product[product]
+        if value < prod_avg:
+            return ep.Style(font_color="#ff0014", numeric_format=",.2f", bold=True)
+        return ep.Style(numeric_format=",.2f", bold=True)
+
+    unified = "Sales by Product by Store"
+    num_cols = len(df.columns)
+    df = df.rename(columns={col: unified for col in df.columns})
+
+    ep.save(
+        excel=ep.Excel(
+            path=out_path,
+            sheets=[
+                ep.Sheet(
+                    name="Sheet1",
+                    components=[
+                        ep.Table(
+                            data=df,
+                            header_style={
+                                col: ep.Style(
+                                    bold=True, align="center", valign="vcenter"
+                                )
+                                for col in df.columns
+                            },
+                            body_style=ep.Style(align="center", valign="vcenter"),
+                            idx_column_style={
+                                0: get_store_color,
+                                2: get_value_style,
+                            },
+                            header_filters=False,
+                        ),
+                        ep.Fill(width=num_cols),
+                        ep.Text(
+                            text="Products that sold below average are highlighted in red",
+                            style=ep.Style(
+                                bold=True,
+                                valign="vcenter",
+                                align="center",
+                                border=3,
+                                border_color="#ff0014",
+                            ),
+                            width=num_cols,
+                            height=3,
+                        ),
+                    ],
+                    grid_lines=False,
+                    style=ep.Style(padding=2),
+                )
+            ],
+        )
+    )
+
+
+def run_all(
+        skip_existing: bool = True,
+        out_path: Path = RESOURCES / "output",
+):
+    xlsx_out = out_path / "xlsx_output"
+    img_out_path = out_path / "image_output"
+
+    xlsx_out.mkdir(exist_ok=True, parents=True)
+    img_out_path.mkdir(exist_ok=True, parents=True)
+
+    for func in EXAMPLES:
+        name = func.__name__
+
+        cur_path = xlsx_out / f"{name}.xlsx"
+        cur_img_path = img_out_path / f"{name}.png"
+
+        if not skip_existing or not cur_path.exists():
+            log.info(f"Running {name}")
+            func(cur_path)
+
+        if not skip_existing or not cur_img_path.exists():
+            log.info(f"Taking screenshot of {name}")
+            excel2img.export_img(cur_path, cur_img_path.as_posix())
+
+def run_all(
+    skip_existing: bool = True,
+    out_path: Path = RESOURCES / "output",
+):
+    xlsx_out = out_path / "xlsx_output"
+    img_out_path = out_path / "image_output"
+
+    xlsx_out.mkdir(exist_ok=True, parents=True)
+    img_out_path.mkdir(exist_ok=True, parents=True)
+
+    for func in EXAMPLES:
+        name = func.__name__
+
+        cur_path = xlsx_out / f"{name}.xlsx"
+        cur_img_path = img_out_path / f"{name}.png"
+
+        if not skip_existing or not cur_path.exists():
+            log.info(f"Running {name}")
+            func(cur_path)
+
+        if not skip_existing or not cur_img_path.exists():
+            log.info(f"Taking screenshot of {name}")
+            excel2img.export_img(cur_path, cur_img_path.as_posix())
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
-    link_in_table()
+    run_all()

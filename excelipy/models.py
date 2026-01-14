@@ -101,10 +101,8 @@ class Table(Component):
     data: pd.DataFrame
     header_style: Dict[str, Style] = Field(default_factory=dict)
     body_style: Style = Field(default_factory=Style)
-    column_style: Dict[str, Union[Style, Callable[[Any], Style]]] = Field(
-        default_factory=dict
-    )
-    idx_column_style: Dict[int, Style] = Field(default_factory=dict)
+    column_style: Dict[str, Union[Style, Callable[[Any], Style]]] = Field(default_factory=dict)
+    idx_column_style: Dict[int, Union[Style, Callable[[Any], Style]]] = Field(default_factory=dict)
     column_width: Dict[str, int] = Field(default_factory=dict)
     idx_column_width: Dict[int, int] = Field(default_factory=dict)
     row_style: Dict[int, Style] = Field(default_factory=dict)

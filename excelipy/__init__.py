@@ -9,6 +9,7 @@ __all__ = [
     "Sheet",
     "Excel",
     "save",
+    "row_wise",
 ]
 
 from excelipy.models import (
@@ -24,3 +25,4 @@ from excelipy.models import (
 )
 
 from excelipy.service import save
+from excelipy.writers.table import row_wise

@@ -1,5 +1,6 @@
 import logging
 from collections import defaultdict
+from functools import wraps
 from typing import Tuple, Dict, Optional
 
 import numpy as np
@@ -14,10 +15,22 @@ from excelipy.styles.table import DEFAULT_HEADER_STYLE, DEFAULT_BODY_STYLE
 log = logging.getLogger("excelipy")
 
 DEFAULT_FONT_SIZE = 11
+ROW_WISE_ARG = "_ep_row_wise"
 
 
-def _static_col_style(component: Table, col_name: str) -> Style:
-    maybe = component.column_style.get(col_name)
+def row_wise(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+
+    setattr(wrapper, ROW_WISE_ARG, True)
+    return wrapper
+
+
+def _static_col_style(component: Table, col_name: str, col_idx: int) -> Style:
+    maybe = component.idx_column_style.get(col_idx) or component.column_style.get(
+        col_name
+    )
     return Style() if callable(maybe) or maybe is None else maybe
 
 
@@ -89,17 +102,13 @@ def get_auto_width(
         default_style,
         component.style,
         component.body_style,
-        component.idx_column_style.get(col_idx, Style()).merge(
-            _static_col_style(component, cur_col)
-        ),
+        _static_col_style(component, cur_col, col_idx),
     )
     col_font_family = get_style_font_family(
         default_style,
         component.style,
         component.body_style,
-        component.idx_column_style.get(col_idx, Style()).merge(
-            _static_col_style(component, cur_col)
-        ),
+        _static_col_style(component, cur_col, col_idx),
     )
     all_col_len = data.apply(str).apply(
         lambda it: get_text_size(
@@ -172,7 +181,9 @@ def write_table(
             header_format,
         )
 
-        set_width = component.idx_column_width.get(col_idx) or component.column_width.get(cur_col)
+        set_width = component.idx_column_width.get(
+            col_idx
+        ) or component.column_width.get(cur_col)
         if set_width:
             estimated_width = set_width
         else:
@@ -209,7 +220,7 @@ def write_table(
         )
 
     for col_idx, col in enumerate(component.data.columns):
-        col_style = component.idx_column_style.get(col_idx, Style()).merge(_static_col_style(component, col))
+        col_style = _static_col_style(component, col, col_idx)
         for row_idx, (_, row) in enumerate(component.data.iterrows()):
             row_style = component.row_style.get(row_idx)
             body_style = [
@@ -247,9 +258,14 @@ def write_table(
                 cell = merged_style.fill_inf
                 merged_style = merged_style.model_copy(update=dict(numeric_format=None))
 
-            maybe_callable = component.column_style.get(col)
+            maybe_callable = component.idx_column_style.get(col_idx) or component.column_style.get(col)
+
             if callable(maybe_callable):
-                dyn_style = maybe_callable(cell)
+                if getattr(maybe_callable, ROW_WISE_ARG, False):
+                    dyn_style = maybe_callable(row)
+                else:
+                    dyn_style = maybe_callable(cell)
+
                 if dyn_style is not None:
                     merged_style = merged_style.merge(dyn_style)
 

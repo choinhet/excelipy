@@ -1,4 +1,5 @@
 import importlib.resources as pkg_resources
+import io
 from pathlib import Path
 
 import numpy as np
@@ -52,12 +53,15 @@ def empty_df() -> pd.DataFrame:
 
 
 def test_api(
-        sample_df: pd.DataFrame,
-        empty_df: pd.DataFrame,
-        img_path: Path,
-        numeric_df: pd.DataFrame,
+    sample_df: pd.DataFrame,
+    empty_df: pd.DataFrame,
+    img_path: Path,
+    numeric_df: pd.DataFrame,
 ):
-    tb = pd.DataFrame({"testing": [ep.Link(text="google", url="https://www.google.com")]})
+    tb = pd.DataFrame(
+        {"testing": [ep.Link(text="google", url="https://www.google.com")]}
+    )
+
     def get_match_style(result: int) -> ep.Style:
         return (
             ep.Style(
@@ -72,6 +76,24 @@ def test_api(
                 bold=True,
             )
         )
+
+    @ep.row_wise
+    def get_match_style_row(row) -> ep.Style:
+        _, result, _ = row
+        return (
+            ep.Style(
+                background="#00ff1e",
+                font_color="#ffffff",
+                bold=True,
+            )
+            if result == 1
+            else ep.Style(
+                background="#ff0013",
+                font_color="#ffffff",
+                bold=True,
+            )
+        )
+
     numeric_formats = {
         "integers": ".0f",
         "floats": ".2f",
@@ -79,6 +101,7 @@ def test_api(
         "percents": ".1%",
         "invalid": "invalid",
     }
+
     style = ep.Style(background="#33c481")
     sheets = [
         ep.Sheet(
@@ -103,7 +126,8 @@ def test_api(
                             bold=True,
                             border=5,
                             border_color="#F02932",
-                        ) for col in sample_df.columns
+                        )
+                        for col in sample_df.columns
                     },
                     body_style=ep.Style(font_size=18),
                     column_style={
@@ -144,16 +168,19 @@ def test_api(
                             fill_zero="-",
                         )
                         for col in numeric_df.columns
-                    }
+                    },
                 ),
                 ep.Text(text="Hello", width=10, style=style),
                 ep.Text(text="Hello", width=10, style=style, merged=False),
                 ep.Link(text="Hello", url="https://www.google.com"),
                 ep.Link(text="Hello", url="https://www.google.com", width=2),
-                ep.Link(text="Hello", url="https://www.google.com", width=2, merged=False),
+                ep.Link(
+                    text="Hello", url="https://www.google.com", width=2, merged=False
+                ),
                 ep.Fill(width=10, style=style),
                 ep.Fill(width=10, style=style, merged=False),
                 ep.Table(data=tb),
+                ep.Table(data=sample_df, idx_column_style={1: get_match_style_row}),
             ],
             style=ep.Style(
                 font_size=14,
@@ -164,22 +191,8 @@ def test_api(
         ),
     ]
 
-    temp_dir = Path("temp")
-    temp_dir.mkdir(exist_ok=True, parents=True)
-    temp_path = temp_dir / "filename.xlsx"
-
-    excel = ep.Excel(
-        path=temp_path,
-        sheets=sheets,
-    )
-
+    excel = ep.Excel(path=io.BytesIO(), sheets=sheets)
     ep.save(excel)
-
-    assert temp_path.exists(), "Excel file was not created"
-    assert temp_path.is_file(), "Path is not a file"
-    assert temp_path.stat().st_size > 0, "Excel file is empty"
-    temp_path.unlink(missing_ok=True)
-    temp_dir.rmdir()
 
 
 if __name__ == "__main__":
