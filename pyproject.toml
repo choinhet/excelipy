@@ -14,15 +14,6 @@ dependencies = [
 ]
 
 [dependency-groups]
-ci = [
-    "pytest>=8.3.3",
-    "pytest-cov>=4.1.0",
-    "coverage>=7.6.1",
-    "pytest-mock>=3.14.0",
-    "pytest-asyncio>=0.25.3",
-    "debugpy>=1.8.13",
-    "pyright>=1.1.398",
-]
 dev = [
     "pytest>=8.3.3",
     "pytest-cov>=4.1.0",
@@ -32,7 +23,7 @@ dev = [
     "debugpy>=1.8.13",
     "pyright>=1.1.398",
     "pyarrow>=21.0.0",
-    "excel2img>=1.4.0",
+    "excel2img>=1.4.0; sys_platform == 'win32'",
     "duckdb>=1.4.3",
     "matplotlib>=3.9.4",
 ]

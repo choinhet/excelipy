@@ -20,7 +20,7 @@ jobs:
         run: pip install uv
       
       - name: Install dependencies
-        run: uv sync --group ci
+        run: uv sync --dev
       
       - name: Run unit tests with coverage
         run: uv run pytest test/ --cov=excelipy --cov-report=xml
