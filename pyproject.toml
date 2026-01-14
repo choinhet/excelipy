@@ -1,6 +1,6 @@
 [project]
 name = "excelipy"
-version = "1.0.0"
+version = "1.0.1"
 description = "Wrapper around xlsxwriter to improve usability"
 readme = "README.md"
 requires-python = ">=3.9.10"
@@ -13,8 +13,17 @@ dependencies = [
     "xlsxwriter>=3.2.2",
 ]
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+ci = [
+    "pytest>=8.3.3",
+    "pytest-cov>=4.1.0",
+    "coverage>=7.6.1",
+    "pytest-mock>=3.14.0",
+    "pytest-asyncio>=0.25.3",
+    "debugpy>=1.8.13",
+    "pyright>=1.1.398",
+]
+dev = [
     "pytest>=8.3.3",
     "pytest-cov>=4.1.0",
     "coverage>=7.6.1",
