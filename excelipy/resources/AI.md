@@ -1,37 +1,64 @@
-# excelipy — AI Guide
+# excelipy — AI Agent Guide
 
-This guide is for AI assistants generating Excel files via `excelipy` using **structured output** (JSON deserialized
-into Pydantic models).
+This guide instructs AI agents on how to generate valid Excel files via `excelipy` using **structured JSON output**
+deserialized into Pydantic models.
+
+---
+
+## Choosing a component — decision rules
+
+Before defining any component, apply these rules in order:
+
+1. Displaying a title, label, or note? → **`Text`**
+2. Displaying row/column data? → **`Table`**
+3. Displaying a clickable URL? → **`Link`**
+4. Need blank vertical space between two other components? → **`Fill`** *(only valid use)*
+5. Unsure? → Use `Text` or `Table`. **Never default to `Fill`.**
+
+> **Omission beats `Fill`**: if content is unknown or not yet available, omit the component entirely.
+> Do not insert `Fill` as a placeholder.
+
+---
+
+## ❌ Anti-patterns — never do these
+
+| Wrong                                    | Right                                 |
+|------------------------------------------|---------------------------------------|
+| Use `Fill` when content is unknown       | Omit the component entirely           |
+| Use `Fill` as a title or label cell      | Use `Text`                            |
+| Use `Fill` for decorative colored blocks | Use `Text` with a background style    |
+| Render `Table` with `data: []`           | Omit the `Table` if there are no rows |
+| Use `Text` for row data                  | Use `Table`                           |
+
+---
 
 ## Top-level structure
 
 ```json
 {
   "name": "Sheet1",
-  "components": [
-    ...
-  ],
+  "components": [],
   "grid_lines": true,
   "style": {}
 }
 ```
 
-| Field        | Type    | Default  | Description                                |
-|--------------|---------|----------|--------------------------------------------|
-| `name`       | string  | required | Sheet tab name                             |
-| `components` | array   | `[]`     | Ordered list of components (top to bottom) |
-| `grid_lines` | boolean | `true`   | Show/hide grid lines                       |
-| `style`      | Style   | `{}`     | Default style applied to the whole sheet   |
+| Field        | Type    | Default  | Description                                                                                                                                   |
+|--------------|---------|----------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| `name`       | string  | required | Sheet tab name                                                                                                                                |
+| `components` | array   | `[]`     | Ordered list of components (top to bottom). Every component must carry real content — do not insert `Fill` unless explicit spacing is needed. |
+| `grid_lines` | boolean | `true`   | Show/hide grid lines                                                                                                                          |
+| `style`      | Style   | `{}`     | Default style applied to the whole sheet                                                                                                      |
 
 ---
 
 ## Component types
 
-Each component is one of: `Text`, `Link`, `Fill`, `Image`, `Table`.
-
 ### Text
 
 A single cell (or merged row of cells) with a text label.
+
+**Use for:** titles, section headers, footnotes, annotations, disclaimers.
 
 ```json
 {
@@ -47,17 +74,21 @@ A single cell (or merged row of cells) with a text label.
 }
 ```
 
-| Field    | Type   | Default                              |
-|----------|--------|--------------------------------------|
-| `text`   | string | required                             |
-| `width`  | int    | `1`                                  |
-| `height` | int    | `1`                                  |
-| `merged` | bool   | `true` — merges cells across `width` |
-| `style`  | Style  | `{}`                                 |
+| Field    | Type   | Default  | Notes                       |
+|----------|--------|----------|-----------------------------|
+| `text`   | string | required | The label to display        |
+| `width`  | int    | `1`      | Number of columns to span   |
+| `height` | int    | `1`      | Number of rows to span      |
+| `merged` | bool   | `true`   | Merges cells across `width` |
+| `style`  | Style  | `{}`     | See Style reference below   |
+
+---
 
 ### Link
 
-A hyperlink cell.
+A clickable hyperlink cell.
+
+**Use for:** URLs, dashboards, external references.
 
 ```json
 {
@@ -69,23 +100,16 @@ A hyperlink cell.
 }
 ```
 
-### Fill
-
-An empty spacer cell (used for visual padding between components).
-
-```json
-{
-  "width": 3,
-  "height": 1,
-  "style": {
-    "background": "#D0D0D0"
-  }
-}
-```
+---
 
 ### Table
 
-The primary component. `data` is an **array of records** (list of objects).
+The primary data component. `data` is an **array of records** (list of objects). Each object is one row; keys become
+column headers.
+
+**Use for:** any structured, row-based data.
+
+> ⚠️ If `data` would be empty (`[]`), **omit the Table entirely**.
 
 ```json
 {
@@ -132,29 +156,52 @@ The primary component. `data` is an **array of records** (list of objects).
 }
 ```
 
-| Field                 | Type             | Default  | Description                                                     |
-|-----------------------|------------------|----------|-----------------------------------------------------------------|
-| `data`                | array of objects | required | Each object is a row; keys become column headers                |
-| `header_style`        | `{ col: Style }` | `{}`     | Style per column header cell                                    |
-| `body_style`          | Style            | `{}`     | Applied to all body cells                                       |
-| `column_style`        | `{ col: Style }` | `{}`     | Static style per column (**no callables in structured output**) |
-| `idx_column_style`    | `{ int: Style }` | `{}`     | Style by column index (0-based)                                 |
-| `column_width`        | `{ col: int }`   | `{}`     | Fixed width per column                                          |
-| `idx_column_width`    | `{ int: int }`   | `{}`     | Fixed width by column index                                     |
-| `row_style`           | `{ int: Style }` | `{}`     | Style by row index (0-based)                                    |
-| `header_filters`      | bool             | `true`   | Show Excel autofilter dropdowns                                 |
-| `default_style`       | bool             | `true`   | Apply excelipy default table styling                            |
-| `max_col_width`       | int              | `null`   | Cap auto-detected column width                                  |
-| `merge_equal_headers` | bool             | `true`   | Merge adjacent headers with the same name                       |
+| Field                 | Type             | Default  | Description                                                   |
+|-----------------------|------------------|----------|---------------------------------------------------------------|
+| `data`                | array of objects | required | Rows of data — **must be non-empty**                          |
+| `header_style`        | `{ col: Style }` | `{}`     | Style per column header cell                                  |
+| `body_style`          | Style            | `{}`     | Applied to all body cells                                     |
+| `column_style`        | `{ col: Style }` | `{}`     | Static style per column *(no callables in structured output)* |
+| `idx_column_style`    | `{ int: Style }` | `{}`     | Style by column index (0-based)                               |
+| `column_width`        | `{ col: int }`   | `{}`     | Fixed width per column                                        |
+| `idx_column_width`    | `{ int: int }`   | `{}`     | Fixed width by column index                                   |
+| `row_style`           | `{ int: Style }` | `{}`     | Style by row index (0-based)                                  |
+| `header_filters`      | bool             | `true`   | Show Excel autofilter dropdowns                               |
+| `default_style`       | bool             | `true`   | Apply excelipy default table styling                          |
+| `max_col_width`       | int              | `null`   | Cap auto-detected column width                                |
+| `merge_equal_headers` | bool             | `true`   | Merge adjacent headers with the same name                     |
 
-> **Note:** `column_style` and `idx_column_style` only support static `Style` objects in structured output. Callable (
-> conditional) styles require Python code.
+> **Note:** `column_style` and `idx_column_style` only support static `Style` objects in structured output.
+> Callable (conditional) styles require Python code.
+
+---
+
+### Fill ⚠️ — spacer only
+
+An empty cell used **exclusively** to add blank vertical space between two other components.
+
+**Valid use:** inserting whitespace between a title and a table, or between two tables.  
+**Invalid use:** placeholder for unknown content, decorative color blocks, labels, or any data.
+
+```json
+{
+  "height": 1
+}
+```
+
+| Field    | Type  | Default | Notes                              |
+|----------|-------|---------|------------------------------------|
+| `width`  | int   | `1`     | Columns to span                    |
+| `height` | int   | `1`     | Rows of blank space                |
+| `style`  | Style | `{}`    | Avoid styling — it signals content |
+
+> If you're tempted to add a `background` or `text` to a `Fill`, use `Text` instead.
 
 ---
 
 ## Style object
 
-All style fields are optional. Omit a field to leave it unset (inherits from parent or default).
+All fields are optional. Omit a field to inherit from the parent or sheet default.
 
 ```json
 {
@@ -165,6 +212,7 @@ All style fields are optional. Omit a field to leave it unset (inherits from par
   "font_family": "Arial",
   "font_size": 12,
   "bold": true,
+  "italic": false,
   "text_wrap": false,
   "underline": 1,
   "border": 1,
@@ -185,20 +233,29 @@ All style fields are optional. Omit a field to leave it unset (inherits from par
 }
 ```
 
-**`numeric_format` examples:**
+### `numeric_format` reference
 
-| Format string | Result                 |
-|---------------|------------------------|
-| `".0f"`       | `1234`                 |
-| `".2f"`       | `1234.56`              |
-| `",.2f"`      | `1,234.56`             |
-| `",.1f"`      | `1,234.6`              |
-| `".1%"`       | `12.3%`                |
-| `"%d - %B"`   | `01 - January` (dates) |
+| Format string | Example output |
+|---------------|----------------|
+| `".0f"`       | `1234`         |
+| `".2f"`       | `1234.56`      |
+| `",.2f"`      | `1,234.56`     |
+| `",.1f"`      | `1,234.6`      |
+| `".1%"`       | `12.3%`        |
+| `"%d - %B"`   | `01 - January` |
 
-**`underline` values:** `1` = single, `2` = double, `33` = single accounting, `34` = double accounting.
+### `underline` values
 
-**`border` / `border_*` values:** 1–13 (xlsxwriter border style index). Use `1` for thin, `2` for medium, `5` for thick.
+| Value | Meaning           |
+|-------|-------------------|
+| `1`   | Single            |
+| `2`   | Double            |
+| `33`  | Single accounting |
+| `34`  | Double accounting |
+
+### `border` / `border_*` values
+
+Use xlsxwriter border style index: `1` = thin, `2` = medium, `5` = thick. Range: 1–13.
 
 ---
 
@@ -228,11 +285,11 @@ All style fields are optional. Omit a field to leave it unset (inherits from par
       "data": [
         {
           "Product": "Apple",
-          "Value": 1200.5
+          "Value": 1200.50
         },
         {
           "Product": "Banana",
-          "Value": 800.0
+          "Value": 800.00
         },
         {
           "Product": "Cherry",
@@ -260,7 +317,7 @@ All style fields are optional. Omit a field to leave it unset (inherits from par
       }
     },
     {
-      "width": 2
+      "height": 1
     },
     {
       "text": "All values in USD",
@@ -274,3 +331,5 @@ All style fields are optional. Omit a field to leave it unset (inherits from par
   ]
 }
 ```
+
+> Note: the `Fill` spacer above (`{ "height": 1 }`) is the correct, minimal form — no background, no style, no content.
