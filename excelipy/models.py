@@ -179,7 +179,7 @@ class Table(BaseComponent):
 
 
 Component = Annotated[
-    Text | Link | Fill | Image | Table,
+    Union[Text, Link, Fill, Image, Table],
     Field(discriminator="type")
 ]
 
