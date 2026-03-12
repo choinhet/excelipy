@@ -39,6 +39,7 @@ def get_text_size(
     font_size: Optional[int] = None,
     font_family: Optional[str] = None,
 ):
+    text = str(text)
     cur_font_size = font_size or DEFAULT_FONT_SIZE
     cur_font_family = font_family or "Arial"
 

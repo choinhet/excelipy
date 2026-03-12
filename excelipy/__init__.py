@@ -10,8 +10,10 @@ __all__ = [
     "Excel",
     "save",
     "row_wise",
+    "AI_GUIDE",
 ]
 
+from excelipy.const import AI_GUIDE
 from excelipy.models import (
     Style,
     Component,

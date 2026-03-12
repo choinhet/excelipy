@@ -1,4 +1,8 @@
 import re
+from importlib.resources import files
+from pathlib import Path
+
+from excelipy import resources
 
 DATE_CONVERSION = {
     "%Y": "yyyy",
@@ -70,3 +74,5 @@ PROP_MAP = dict(
 PRE_PROCESS_MAP = dict(
     numeric_format=python_to_excel_fmt,
 )
+
+AI_GUIDE = (Path(str(files(resources))) / "AI.md").read_text(encoding="utf-8")

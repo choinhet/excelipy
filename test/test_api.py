@@ -195,5 +195,19 @@ def test_api(
     ep.save(excel)
 
 
+def test_serialization_and_deserialization(sample_df: pd.DataFrame):
+    json_lines = sample_df.to_json(orient="records", lines=True)
+    dict_lines = sample_df.to_dict(orient="records")
+    ep.Sheet.model_json_schema()
+    ep.Table.model_validate({"data": json_lines})
+    ep.Table.model_validate({"data": dict_lines})
+    with pytest.raises(Exception):
+        ep.Table.model_validate({"data": 1})
+    ep.Table(data=sample_df).model_dump_json()
+
+def test_load_ai_guide():
+    assert isinstance(ep.AI_GUIDE, str)
+
+
 if __name__ == "__main__":
     pytest.main([__file__])
