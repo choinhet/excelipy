@@ -75,6 +75,44 @@ Defines how cells look. Supports most common Excel formatting:
 - `Image`: Embeds an image from a `path`.
 - `Fill`: Empty space component to push other components down or across.
 
+### AI Integration
+
+Excelipy exposes `ep.AI_GUIDE` — a prompt string describing its full API — and Pydantic-compatible schemas so any LLM
+with structured output can generate excelipy components directly.
+
+Pass `ep.AI_GUIDE` as the system prompt, use any component's `.model_json_schema()` to constrain the output, then
+validate the result with `.model_validate()`. Any Excelipy model can be targeted — `ep.Table`, `ep.Text`, `ep.Sheet`,
+etc. The more complex the schema, the stronger the model needs to be.
+
+```python
+import excelipy as ep
+from pathlib import Path
+from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_ollama import ChatOllama
+
+model = ChatOllama(model="qwen2.5:7b")
+
+# Any component can be targeted
+target = ep.Table  # or ep.Text, ep.Sheet, ...
+
+result = target.model_validate(
+    model
+    .with_structured_output(schema=target.model_json_schema())
+    .invoke([
+        SystemMessage(ep.AI_GUIDE),
+        HumanMessage("Create a mocked social platform interaction table and style it"),
+    ])
+)
+
+ep.save(ep.Excel(
+    path=Path("ai_output.xlsx"),
+    sheets=[ep.Sheet(name="Sheet1", components=[result])],
+))
+```
+
+This works with any framework that supports structured output (LangChain, the OpenAI SDK, the Anthropic SDK, etc.) —
+just swap the model and client.
+
 ### Examples
 
 ### Displaying a table
@@ -318,5 +356,4 @@ The final output features conditional red text for below-average sales, a descri
 lines.
 
 ![conditional_formatting.png](test/resources/output/image_output/conditional_formatting.png)
-
 

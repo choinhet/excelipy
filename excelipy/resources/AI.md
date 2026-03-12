@@ -29,6 +29,24 @@ Before defining any component, apply these rules in order:
 | Use `Fill` for decorative colored blocks | Use `Text` with a background style    |
 | Render `Table` with `data: []`           | Omit the `Table` if there are no rows |
 | Use `Text` for row data                  | Use `Table`                           |
+| Omit the `type` field from any component | Always include `"type"` — see below   |
+
+---
+
+## Required: `type` field on every component
+
+Every component object **must** include a `"type"` field with the exact component name.
+This is required — omitting it will cause a validation error.
+
+| Component | Required `type` value |
+|-----------|-----------------------|
+| `Text`    | `"Text"`              |
+| `Link`    | `"Link"`              |
+| `Fill`    | `"Fill"`              |
+| `Image`   | `"Image"`             |
+| `Table`   | `"Table"`             |
+
+Every component example in this guide includes the `type` field. Always follow that pattern.
 
 ---
 
@@ -62,6 +80,7 @@ A single cell (or merged row of cells) with a text label.
 
 ```json
 {
+  "type": "Text",
   "text": "Sales Report",
   "width": 3,
   "height": 1,
@@ -74,13 +93,14 @@ A single cell (or merged row of cells) with a text label.
 }
 ```
 
-| Field    | Type   | Default  | Notes                       |
-|----------|--------|----------|-----------------------------|
-| `text`   | string | required | The label to display        |
-| `width`  | int    | `1`      | Number of columns to span   |
-| `height` | int    | `1`      | Number of rows to span      |
-| `merged` | bool   | `true`   | Merges cells across `width` |
-| `style`  | Style  | `{}`     | See Style reference below   |
+| Field    | Type   | Default  | Notes                           |
+|----------|--------|----------|---------------------------------|
+| `type`   | string | `"Text"` | **Required** — must be `"Text"` |
+| `text`   | string | required | The label to display            |
+| `width`  | int    | `1`      | Number of columns to span       |
+| `height` | int    | `1`      | Number of rows to span          |
+| `merged` | bool   | `true`   | Merges cells across `width`     |
+| `style`  | Style  | `{}`     | See Style reference below       |
 
 ---
 
@@ -92,6 +112,7 @@ A clickable hyperlink cell.
 
 ```json
 {
+  "type": "Link",
   "text": "Open Dashboard",
   "url": "https://example.com",
   "width": 2,
@@ -99,6 +120,15 @@ A clickable hyperlink cell.
   "style": {}
 }
 ```
+
+| Field    | Type   | Default  | Notes                           |
+|----------|--------|----------|---------------------------------|
+| `type`   | string | `"Link"` | **Required** — must be `"Link"` |
+| `text`   | string | required | Link label                      |
+| `url`    | string | required | Full URL                        |
+| `width`  | int    | `1`      | Number of columns to span       |
+| `merged` | bool   | `true`   | Merges cells across `width`     |
+| `style`  | Style  | `{}`     |                                 |
 
 ---
 
@@ -113,6 +143,7 @@ column headers.
 
 ```json
 {
+  "type": "Table",
   "data": [
     {
       "Product": "Apple",
@@ -156,20 +187,21 @@ column headers.
 }
 ```
 
-| Field                 | Type             | Default  | Description                                                   |
-|-----------------------|------------------|----------|---------------------------------------------------------------|
-| `data`                | array of objects | required | Rows of data — **must be non-empty**                          |
-| `header_style`        | `{ col: Style }` | `{}`     | Style per column header cell                                  |
-| `body_style`          | Style            | `{}`     | Applied to all body cells                                     |
-| `column_style`        | `{ col: Style }` | `{}`     | Static style per column *(no callables in structured output)* |
-| `idx_column_style`    | `{ int: Style }` | `{}`     | Style by column index (0-based)                               |
-| `column_width`        | `{ col: int }`   | `{}`     | Fixed width per column                                        |
-| `idx_column_width`    | `{ int: int }`   | `{}`     | Fixed width by column index                                   |
-| `row_style`           | `{ int: Style }` | `{}`     | Style by row index (0-based)                                  |
-| `header_filters`      | bool             | `true`   | Show Excel autofilter dropdowns                               |
-| `default_style`       | bool             | `true`   | Apply excelipy default table styling                          |
-| `max_col_width`       | int              | `null`   | Cap auto-detected column width                                |
-| `merge_equal_headers` | bool             | `true`   | Merge adjacent headers with the same name                     |
+| Field                 | Type             | Default   | Description                                                   |
+|-----------------------|------------------|-----------|---------------------------------------------------------------|
+| `type`                | string           | `"Table"` | **Required** — must be `"Table"`                              |
+| `data`                | array of objects | required  | Rows of data — **must be non-empty**                          |
+| `header_style`        | `{ col: Style }` | `{}`      | Style per column header cell                                  |
+| `body_style`          | Style            | `{}`      | Applied to all body cells                                     |
+| `column_style`        | `{ col: Style }` | `{}`      | Static style per column *(no callables in structured output)* |
+| `idx_column_style`    | `{ int: Style }` | `{}`      | Style by column index (0-based)                               |
+| `column_width`        | `{ col: int }`   | `{}`      | Fixed width per column                                        |
+| `idx_column_width`    | `{ int: int }`   | `{}`      | Fixed width by column index                                   |
+| `row_style`           | `{ int: Style }` | `{}`      | Style by row index (0-based)                                  |
+| `header_filters`      | bool             | `true`    | Show Excel autofilter dropdowns                               |
+| `default_style`       | bool             | `true`    | Apply excelipy default table styling                          |
+| `max_col_width`       | int              | `null`    | Cap auto-detected column width                                |
+| `merge_equal_headers` | bool             | `true`    | Merge adjacent headers with the same name                     |
 
 > **Note:** `column_style` and `idx_column_style` only support static `Style` objects in structured output.
 > Callable (conditional) styles require Python code.
@@ -185,17 +217,19 @@ An empty cell used **exclusively** to add blank vertical space between two other
 
 ```json
 {
+  "type": "Fill",
   "height": 1
 }
 ```
 
-| Field    | Type  | Default | Notes                              |
-|----------|-------|---------|------------------------------------|
-| `width`  | int   | `1`     | Columns to span                    |
-| `height` | int   | `1`     | Rows of blank space                |
-| `style`  | Style | `{}`    | Avoid styling — it signals content |
+| Field    | Type   | Default  | Notes                                                 |
+|----------|--------|----------|-------------------------------------------------------|
+| `type`   | string | `"Fill"` | **Required** — must be `"Fill"`                       |
+| `width`  | int    | `1`      | Columns to span                                       |
+| `height` | int    | `1`      | Rows of blank space                                   |
+| `style`  | Style  | `{}`     | Avoid styling — if you need style, use `Text` instead |
 
-> If you're tempted to add a `background` or `text` to a `Fill`, use `Text` instead.
+> If you're tempted to add `background` or text content to a `Fill`, use `Text` instead.
 
 ---
 
@@ -272,6 +306,7 @@ Use xlsxwriter border style index: `1` = thin, `2` = medium, `5` = thick. Range:
   },
   "components": [
     {
+      "type": "Text",
       "text": "Sales by Product",
       "width": 2,
       "style": {
@@ -282,6 +317,7 @@ Use xlsxwriter border style index: `1` = thin, `2` = medium, `5` = thick. Range:
       }
     },
     {
+      "type": "Table",
       "data": [
         {
           "Product": "Apple",
@@ -317,9 +353,11 @@ Use xlsxwriter border style index: `1` = thin, `2` = medium, `5` = thick. Range:
       }
     },
     {
+      "type": "Fill",
       "height": 1
     },
     {
+      "type": "Text",
       "text": "All values in USD",
       "width": 2,
       "style": {
@@ -332,4 +370,4 @@ Use xlsxwriter border style index: `1` = thin, `2` = medium, `5` = thick. Range:
 }
 ```
 
-> Note: the `Fill` spacer above (`{ "height": 1 }`) is the correct, minimal form — no background, no style, no content.
+> Note: the `Fill` spacer above is the correct, minimal form — `type` declared, no background, no style, no content.
