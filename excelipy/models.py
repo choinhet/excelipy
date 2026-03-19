@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import io
 from pathlib import Path
 from typing import Any, Annotated
@@ -38,9 +40,7 @@ class Style(BaseModel):
     padding_top: Optional[int] = Field(default=None)
     text_wrap: Optional[bool] = Field(default=None)
     underline: Optional[Literal[1, 2, 33, 34]] = Field(default=None)
-    valign: Optional[
-        Literal["top", "vcenter", "bottom", "vcenter", "bottom", "vjustify"]
-    ] = Field(default=None)
+    valign: Optional[Literal["top", "vcenter", "bottom", "vcenter", "bottom", "vjustify"]] = Field(default=None)
 
     def merge(self, other: "Style") -> "Style":
         self_dict = self.model_dump(exclude_none=True)
@@ -178,9 +178,15 @@ class Table(BaseComponent):
         )
 
 
+class Group(BaseModel):
+    type: Literal["group"] = Field(default="group")
+    name: str = Field(default="")
+    components: Sequence["Component"] = Field(default_factory=list)
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+
 Component = Annotated[
-    Union[Text, Link, Fill, Image, Table],
-    Field(discriminator="type")
+    Union[Text, Link, Fill, Image, Table, Group], Field(discriminator="type")
 ]
 
 

@@ -1,15 +1,16 @@
 import logging
-from typing import Tuple, Dict, Callable
+from typing import Tuple, Dict, Callable, List, Sequence
 
 import xlsxwriter
 from xlsxwriter.workbook import Workbook, Worksheet
 
-from excelipy.models import Component, Excel, Fill, Style, Table, Text, Image, Link
+from excelipy.models import Component, Excel, Fill, Style, Table, Text, Image, Link, Group
 from excelipy.writers import (
     write_fill,
     write_table,
     write_text,
-    write_image, write_link,
+    write_image,
+    write_link,
 )
 
 log = logging.getLogger("excelipy")
@@ -43,6 +44,18 @@ def write_component(
         origin,
     )
 
+def remove_groups(comp: Component) -> List[Component]:
+    if not isinstance(comp, Group):
+        return [comp]
+    flattened_comps: List[Component] = []
+    for c in comp.components:
+        flattened_comps.extend(remove_groups(c))
+    return flattened_comps
+
+def unnest_components(components: Sequence[Component]) -> List[Component]:
+    nested_comps = [remove_groups(c) for c in components]
+    unnested_comps = [c for comps in nested_comps for c in comps]
+    return unnested_comps
 
 def save(excel: Excel):
     with xlsxwriter.Workbook(excel.path, {
@@ -57,7 +70,7 @@ def save(excel: Excel):
             if not sheet.grid_lines:
                 worksheet.hide_gridlines(2)
 
-            for component in sheet.components:
+            for component in unnest_components(sheet.components):
                 cur_origin = (
                     origin[0] + component.style.pl(),
                     origin[1] + component.style.pt(),

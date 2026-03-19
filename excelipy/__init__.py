@@ -6,6 +6,7 @@ __all__ = [
     "Text",
     "Link",
     "Table",
+    "Group",
     "Sheet",
     "Excel",
     "save",
@@ -24,6 +25,7 @@ from excelipy.models import (
     Sheet,
     Excel,
     Link,
+    Group,
 )
 
 from excelipy.service import save
