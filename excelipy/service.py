@@ -53,6 +53,15 @@ def remove_groups(comp: Component) -> List[Component]:
     return flattened_comps
 
 def unnest_components(components: Sequence[Component]) -> List[Component]:
+    """
+    Removes hierarchical groupings and flattens nested components into a single list.
+
+    Args:
+        components: A sequence of `Component` objects to be unnested.
+
+    Returns:
+        A flat list of all `Component` objects after removing groups and unnesting.
+    """
     nested_comps = [remove_groups(c) for c in components]
     unnested_comps = [c for comps in nested_comps for c in comps]
     return unnested_comps

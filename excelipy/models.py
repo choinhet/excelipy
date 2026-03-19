@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import io
 from pathlib import Path
-from typing import Any, Annotated
+from typing import Any, Annotated, List
 from typing import Dict, Optional, Sequence, Literal, Union, Callable
 
 import pandas as pd
@@ -62,8 +62,13 @@ class Style(BaseModel):
 
 
 class BaseComponent(BaseModel):
+    type: Literal["base"] = Field(default="base")
     style: Style = Field(default_factory=Style)
     model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    @property
+    def name(self) -> str:
+        return self.type
 
 
 class Text(BaseComponent):
@@ -192,13 +197,13 @@ Component = Annotated[
 
 class Sheet(BaseModel):
     name: str
-    components: Sequence[Component] = Field(default_factory=list)
+    components: List[Component] = Field(default_factory=list)
     grid_lines: bool = Field(default=True)
     style: Style = Field(default_factory=Style)
 
 
 class Excel(BaseModel):
     path: Union[Path, io.BytesIO]
-    sheets: Sequence[Sheet] = Field(default_factory=list)
+    sheets: List[Sheet] = Field(default_factory=list)
     nan_inf_to_errors: bool = Field(default=True)
     model_config = ConfigDict(arbitrary_types_allowed=True)

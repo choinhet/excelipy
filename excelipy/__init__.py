@@ -11,6 +11,7 @@ __all__ = [
     "Excel",
     "save",
     "row_wise",
+    "unnest_components",
     "AI_GUIDE",
 ]
 
@@ -28,5 +29,5 @@ from excelipy.models import (
     Group,
 )
 
-from excelipy.service import save
+from excelipy.service import save, unnest_components
 from excelipy.writers.table import row_wise

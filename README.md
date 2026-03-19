@@ -350,10 +350,58 @@ ep.save(
         ],
     )
 )
+
 ```
 
 The final output features conditional red text for below-average sales, a descriptive footer box, and no visible grid
 lines.
 
 ![conditional_formatting.png](test/resources/output/image_output/conditional_formatting.png)
+
+### Extra
+
+#### Component Groups
+
+Excelipy supports grouping components together using the `ep.Group` model. This allows you to organize related
+components into logical units, making it easier to manage complex sheet structures, fetch specific sections, and
+potentially replace entire groups later.
+
+**Why use groups?**
+
+- **Organization**: Keep related components together (e.g., a title, table, and footer as one unit).
+- **Reusability**: Define a group once and reuse it across multiple sheets.
+- **Manipulation**: Fetch or replace entire sections of components programmatically.
+
+**Basic usage:**
+
+```python
+import excelipy as ep
+
+# Define a group of components
+header_group = ep.Group(
+    name="Header",
+    components=[
+        ep.Text(text="Monthly Sales Report"),
+        ep.Fill(height=1),
+    ]
+)
+
+# Use the group in a sheet
+sheet = ep.Sheet(
+    name="Sales",
+    components=[
+        header_group,
+        ep.Table(data=pd.DataFrame(...)),
+    ]
+)
+
+# Search for and replace the header group with a single text
+for i, component in enumerate(list(sheet.components)):
+    if isinstance(component, ep.Group) and component.name == "Header":
+        sheet.components[i] = ep.Text(text="Sales Report")
+        break
+```
+
+If you are working directly with sheet components and need to flatten nested `ep.Group` structures into a simple list,
+you can use the `ep.unnest_components` utility function.
 

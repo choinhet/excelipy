@@ -21,6 +21,10 @@ def test_group_unnesting():
         assert not isinstance(c, ep.Group)
     assert size == 5
 
+    # all components have names
+    for c in out:
+        assert isinstance(c.name, str)
+
 
 if __name__ == "__main__":
     pytest.main([__file__])
