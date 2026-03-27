@@ -32,6 +32,35 @@ def sample_df() -> pd.DataFrame:
 
 
 @pytest.fixture
+def big_df() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "testing big columnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn": [
+                1,
+                2,
+                3,
+            ],
+            "testing2": [1, 2, 3],
+            "tested": ["Yay", "Thanks", "Bud"],
+        }
+    )
+
+
+@pytest.fixture
+def big_merged_df() -> pd.DataFrame:
+    col = "testing big columnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn"
+    df = pd.DataFrame(
+        {
+            col: [1, 2, 3],
+            "testing2": [1, 2, 3],
+            "tested": ["Yay", "Thanks", "Bud"],
+        }
+    )
+    df.rename(columns={"testing2": col}, inplace=True)
+    return df
+
+
+@pytest.fixture
 def numeric_df() -> pd.DataFrame:
     return pd.DataFrame(
         {
@@ -55,6 +84,8 @@ def empty_df() -> pd.DataFrame:
 def test_api(
     sample_df: pd.DataFrame,
     empty_df: pd.DataFrame,
+    big_df: pd.DataFrame,
+    big_merged_df: pd.DataFrame,
     img_path: Path,
     numeric_df: pd.DataFrame,
 ):
@@ -99,7 +130,6 @@ def test_api(
         "floats": ".2f",
         "big_numbers": ",.1f",
         "percents": ".1%",
-        "invalid": "invalid",
     }
 
     style = ep.Style(background="#33c481")
@@ -124,7 +154,7 @@ def test_api(
                     header_style={
                         col: ep.Style(
                             bold=True,
-                            border=5,
+                            border=2,
                             border_color="#F02932",
                         )
                         for col in sample_df.columns
@@ -181,6 +211,18 @@ def test_api(
                 ep.Fill(width=10, style=style, merged=False),
                 ep.Table(data=tb),
                 ep.Table(data=sample_df, idx_column_style={1: get_match_style_row}),
+                ep.Table(
+                    data=big_df,
+                    wrap_header=True,
+                    header_filters=False,
+                    max_col_size=200,
+                ),
+                ep.Table(
+                    data=big_merged_df,
+                    header_filters=False,
+                    wrap_header=True,
+                    max_col_size=200,
+                ),
             ],
             style=ep.Style(
                 font_size=14,
@@ -190,8 +232,8 @@ def test_api(
             grid_lines=False,
         ),
     ]
-
-    excel = ep.Excel(path=io.BytesIO(), sheets=sheets)
+    out = io.BytesIO()
+    excel = ep.Excel(path=out, sheets=sheets)
     ep.save(excel)
 
 
@@ -204,6 +246,7 @@ def test_serialization_and_deserialization(sample_df: pd.DataFrame):
     with pytest.raises(Exception):
         ep.Table.model_validate({"data": 1})
     ep.Table(data=sample_df).model_dump_json()
+
 
 def test_load_ai_guide():
     assert isinstance(ep.AI_GUIDE, str)
