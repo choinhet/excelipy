@@ -18,7 +18,9 @@ class Style(BaseModel):
         frozen = True
 
     align: Optional[
-        Literal["left", "center", "right", "fill", "justify", "center_across", "distributed"]
+        Literal[
+            "left", "center", "right", "fill", "justify", "center_across", "distributed"
+        ]
     ] = Field(default=None)
     background: Optional[str] = Field(default=None)
     bold: Optional[bool] = Field(default=None)
@@ -128,7 +130,9 @@ class DataFrameAsJsonLines(pd.DataFrame):
 
     @classmethod
     def __get_pydantic_core_schema__(
-            cls, source_type: Any, handler: GetCoreSchemaHandler
+        cls,
+        source_type: Any,
+        handler: GetCoreSchemaHandler,
     ) -> core_schema.CoreSchema:
         return core_schema.no_info_plain_validator_function(
             cls._validate,
@@ -141,7 +145,9 @@ class DataFrameAsJsonLines(pd.DataFrame):
 
     @classmethod
     def __get_pydantic_json_schema__(
-            cls, schema: core_schema.CoreSchema, handler: GetJsonSchemaHandler
+        cls,
+        schema: core_schema.CoreSchema,
+        handler: GetJsonSchemaHandler,
     ) -> JsonSchemaValue:
         return {
             "type": "array",
@@ -168,11 +174,12 @@ class Table(BaseComponent):
     merge_equal_headers: bool = Field(default=True)
     wrap_header: bool = Field(default=False)
     max_col_size: Optional[int] = Field(default=None)
+    min_col_size: Optional[int] = Field(default=None)
 
     def with_stripes(
-            self,
-            color: str = "#D0D0D0",
-            pattern: Literal["even", "odd"] = "odd",
+        self,
+        color: str = "#D0D0D0",
+        pattern: Literal["even", "odd"] = "odd",
     ) -> "Table":
         return self.model_copy(
             update=dict(
@@ -180,7 +187,7 @@ class Table(BaseComponent):
                     idx: (
                         self.row_style.get(idx, Style()).merge(Style(background=color))
                         if (pattern == "odd" and idx % 2 != 0)
-                           or (pattern == "even" and idx % 2 == 0)
+                        or (pattern == "even" and idx % 2 == 0)
                         else self.row_style.get(idx, Style())
                     )
                     for idx in range(self.data.shape[0])

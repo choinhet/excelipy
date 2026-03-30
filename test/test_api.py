@@ -222,6 +222,7 @@ def test_api(
                     header_filters=False,
                     wrap_header=True,
                     max_col_size=200,
+                    min_col_size=50,
                 ),
             ],
             style=ep.Style(

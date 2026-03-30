@@ -99,11 +99,15 @@ def _set_col_width(
     worksheet: Worksheet,
     abs_col_idx: int,
     width: float,
+    min_col_size: float,
 ) -> float:
     """
     Update the sheet-level column width cache to max(existing, width),
     then apply it to the worksheet. Always returns the value actually set.
     """
+    if min_col_size is not None:
+        width = max(width, min_col_size)
+
     sheet_cache = _get_sheet_cache(workbook, worksheet)
     final = max(sheet_cache.get(abs_col_idx, 0), width)
     sheet_cache[abs_col_idx] = final
@@ -226,7 +230,13 @@ def _fix_merged_header_widths(
                     new_width = min(new_width, component.max_col_size)
                 this_table_widths[i] = new_width
                 # _set_col_width takes max with cache and calls set_column.
-                _set_col_width(workbook, worksheet, origin[0] + i, new_width)
+                _set_col_width(
+                    workbook=workbook,
+                    worksheet=worksheet,
+                    abs_col_idx=origin[0] + i,
+                    width=new_width,
+                    min_col_size=component.min_col_size,
+                )
 
 
 def write_table(
@@ -310,7 +320,11 @@ def write_table(
 
         # _set_col_width takes max(cache, estimated) and calls set_column.
         final_width = _set_col_width(
-            workbook, worksheet, origin[0] + col_idx, estimated_width
+            workbook=workbook,
+            worksheet=worksheet,
+            abs_col_idx=origin[0] + col_idx,
+            width=estimated_width,
+            min_col_size=component.min_col_size,
         )
 
         log.debug(
