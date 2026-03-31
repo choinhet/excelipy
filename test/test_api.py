@@ -53,7 +53,7 @@ def big_merged_df() -> pd.DataFrame:
         {
             col: [1, 2, 3],
             "testing2": [1, 2, 3],
-            "tested": ["Yay", "Thanks", "Bud"],
+            "tested": ["Yaay", "Thanks", "Bud"],
         }
     )
     df.rename(columns={"testing2": col}, inplace=True)
@@ -126,7 +126,7 @@ def test_api(
         )
 
     numeric_formats = {
-        "integers": ".0f",
+        "integers": ",d",
         "floats": ".2f",
         "big_numbers": ",.1f",
         "percents": ".1%",
@@ -251,6 +251,40 @@ def test_serialization_and_deserialization(sample_df: pd.DataFrame):
 
 def test_load_ai_guide():
     assert isinstance(ep.AI_GUIDE, str)
+
+def test_big_columns():
+    df = pd.DataFrame({"Big-Title-" * 18: [
+        "big_content-" * 10,
+        "big_content-" * 5,
+        ]})
+
+    buf = io.BytesIO()
+    ep.save(
+        excel=ep.Excel(
+            path=buf,
+            sheets=[
+                ep.Sheet(
+                    name="Sheet1",
+                    components=[
+                        ep.Table(
+                            data=df,
+                            header_style={
+                                "test": ep.Style(
+                                    bold=True,
+                                    valign="vcenter",
+                                    align="center",
+                                )
+                            },
+                            min_col_size=7,
+                            header_filters=False,
+                            max_col_size=80,
+                            wrap_header=True,
+                        )
+                    ],
+                )
+            ],
+        )
+    )
 
 
 if __name__ == "__main__":
