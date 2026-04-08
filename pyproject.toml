@@ -30,3 +30,6 @@ dev = [
 
 [tool.setuptools]
 packages = ["excelipy"]
+
+[tool.setuptools.package-data]
+excelipy = ["py.typed"]
