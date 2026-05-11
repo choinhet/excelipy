@@ -1,7 +1,7 @@
 import logging
 import math
 from collections import defaultdict
-from functools import reduce, wraps
+from functools import reduce, wraps, lru_cache
 from typing import Tuple, Dict, Optional, Set, Any
 
 import numpy as np
@@ -45,10 +45,10 @@ def _static_col_style(component: Table, col_name: str, col_idx: int) -> Style:
 
 
 def _col_style_chain(
-    component: Table,
-    col_name: str,
-    col_idx: int,
-    default_style: Style,
+        component: Table,
+        col_name: str,
+        col_idx: int,
+        default_style: Style,
 ) -> Tuple[Style, ...]:
     return (
         default_style,
@@ -84,14 +84,14 @@ def _apply_numeric_format(value: Any, numeric_format: Optional[str]) -> str:
     return str(value)
 
 
-def get_style_font_family(*styles: Style) -> Optional[str]:
+def get_style_font_family(*styles: Style | None) -> Optional[str]:
     cur_font = None
     for s in filter(None, styles):
         cur_font = s.font_family or cur_font
     return cur_font
 
 
-def get_style_font_size(*styles: Style) -> Optional[int]:
+def get_style_font_size(*styles: Style | None) -> Optional[int]:
     cur_font = None
     for s in filter(None, styles):
         cur_font = s.font_size or cur_font
@@ -103,21 +103,28 @@ def get_style_font_size(*styles: Style) -> Optional[int]:
 # ---------------------------------------------------------------------------
 
 
+@lru_cache(maxsize=32)
+def _load_font(
+        font_family: str, font_size: int
+) -> ImageFont.ImageFont | ImageFont.FreeTypeFont:
+    try:
+        return ImageFont.truetype(f"{font_family.lower()}.ttf", font_size)
+    except Exception as e:
+        log.debug(
+            f"Could not load custom font {font_family}, using default. Exception: {e}"
+        )
+        return ImageFont.load_default()
+
+
 def get_text_size(
-    text: str,
-    font_size: Optional[int] = None,
-    font_family: Optional[str] = None,
+        text: str,
+        font_size: Optional[int] = None,
+        font_family: Optional[str] = None,
 ) -> float:
     text = str(text)
     cur_font_size = font_size or DEFAULT_FONT_SIZE
     cur_font_family = font_family or "Calibri"
-    try:
-        cur_font = ImageFont.truetype(f"{cur_font_family}.ttf".lower(), cur_font_size)
-    except Exception as e:
-        cur_font = ImageFont.load_default()
-        log.debug(
-            f"Could not load custom font {cur_font_family}, using default. Exception: {e}"
-        )
+    cur_font = _load_font(cur_font_family, cur_font_size)
     return cur_font.getlength(text)
 
 
@@ -130,7 +137,9 @@ def _excel_to_px(excel_units: float, tuning: int, padding: int) -> float:
 
 
 def _header_font(
-    cur_col: str, component: Table, default_style: Style
+        cur_col: str,
+        component: Table,
+        default_style: Style,
 ) -> Tuple[Optional[int], Optional[str]]:
     font_size = get_style_font_size(
         DEFAULT_HEADER_STYLE,
@@ -148,7 +157,11 @@ def _header_font(
 
 
 def _header_excel_width(
-    cur_col: str, component: Table, tuning: int, padding: int, default_style: Style
+        cur_col: str,
+        component: Table,
+        tuning: int,
+        padding: int,
+        default_style: Style,
 ) -> float:
     font_size, font_family = _header_font(cur_col, component, default_style)
     return _px_to_excel(get_text_size(cur_col, font_size, font_family), tuning, padding)
@@ -163,7 +176,6 @@ def _count_lines(text: str, text_px: float, col_px: float) -> int:
     """How many lines does text_px need when the column is col_px wide."""
     ratio = trunc(text_px / max(col_px, 1), 1)
     result = math.ceil(ratio)
-    log.debug(f"Text {text!r}, requires {result} lines, ratio: {ratio}")
     return result
 
 
@@ -185,12 +197,12 @@ def _get_sheet_cache(workbook: Workbook, worksheet: Worksheet) -> Dict[int, floa
 
 
 def _set_col_width(
-    workbook: Workbook,
-    worksheet: Worksheet,
-    abs_col_idx: int,
-    width: float,
-    min_col_size: Optional[float],
-    max_col_size: Optional[float],
+        workbook: Workbook,
+        worksheet: Worksheet,
+        abs_col_idx: int,
+        width: float,
+        min_col_size: Optional[float],
+        max_col_size: Optional[float],
 ) -> float:
     """
     Clamp width to [min_col_size, max_col_size], then persist the maximum
@@ -220,22 +232,13 @@ def _set_col_width(
 
 
 def get_auto_width(
-    cur_col: str,
-    col_idx: int,
-    data: pd.Series,
-    component: Table,
-    default_style: Style,
-    is_merged_header: bool = False,
+        cur_col: str,
+        col_idx: int,
+        data: pd.Series,
+        component: Table,
+        default_style: Style,
+        is_merged_header: bool = False,
 ) -> float:
-    """
-    Compute ideal column width in Excel character units.
-
-    Non-merged  → max(header_px, body_px): fits both with no overflow or waste.
-    Merged      → body_px only: the post-pass grows the span to fit the header.
-
-    min/max_col_size are applied by _set_col_width, not here, so this returns
-    the content-driven width before clamping.
-    """
     tuning = component.auto_width_tuning or TUNING_DEFAULT
     padding = component.auto_width_padding or PADDING_DEFAULT
 
@@ -254,11 +257,16 @@ def get_auto_width(
     for s in chain_styles:
         numeric_fmt = s.numeric_format or numeric_fmt
 
-    body_px = (
-        data.apply(lambda v: _apply_numeric_format(v, numeric_fmt))
-        .apply(lambda it: get_text_size(it, col_font_size, col_font_family))
-        .max()
-    )
+    max_body_text = str(
+        data.iloc[
+            (
+                data.apply(lambda v: _apply_numeric_format(v, numeric_fmt))
+                .apply(len)
+                .idxmax()
+            )
+        ]
+    ) if not data.empty else ""
+    body_px = get_text_size(max_body_text, col_font_size, col_font_family)
 
     if not is_merged_header:
         font_size, font_family = _header_font(cur_col, component, default_style)
@@ -278,13 +286,13 @@ def get_auto_width(
 
 
 def _fix_merged_header_widths(
-    workbook: Workbook,
-    worksheet: Worksheet,
-    component: Table,
-    idx_by_header: Dict[str, list],
-    origin: Tuple[int, int],
-    this_table_widths: Dict[int, float],
-    default_style: Style,
+        workbook: Workbook,
+        worksheet: Worksheet,
+        component: Table,
+        idx_by_header: Dict[str, list],
+        origin: Tuple[int, int],
+        this_table_widths: Dict[int, float],
+        default_style: Style,
 ) -> None:
     """
     Ensure each merged span is wide enough to contain its header text.
@@ -329,10 +337,10 @@ def _fix_merged_header_widths(
 
 
 def _calc_header_height(
-    component: Table,
-    idx_by_header: Dict[str, list],
-    this_table_widths: Dict[int, float],
-    default_style: Style,
+        component: Table,
+        idx_by_header: Dict[str, list],
+        this_table_widths: Dict[int, float],
+        default_style: Style,
 ) -> float:
     """
     Estimate the header row height based on how many lines each header cell
@@ -377,10 +385,10 @@ def _calc_header_height(
 
 
 def _calc_body_row_height(
-    row: pd.Series,
-    col_widths: Dict[int, float],
-    component: Table,
-    default_style: Style,
+        row: pd.Series,
+        col_widths: Dict[int, float],
+        component: Table,
+        default_style: Style,
 ) -> float:
     """
     Estimate the body row height based on the widest content in each cell.
@@ -420,11 +428,11 @@ def _calc_body_row_height(
 
 
 def write_table(
-    workbook: Workbook,
-    worksheet: Worksheet,
-    component: Table,
-    default_style: Style,
-    origin: Tuple[int, int] = (0, 0),
+        workbook: Workbook,
+        worksheet: Worksheet,
+        component: Table,
+        default_style: Style,
+        origin: Tuple[int, int] = (0, 0),
 ) -> Tuple[int, int]:
     x_size = component.data.shape[1]
     y_size = component.data.shape[0] + 1  # +1 for the header row
@@ -508,9 +516,6 @@ def write_table(
             max_col_size=component.max_col_size,
         )
         final_table_widths[col_idx] = final_width
-        log.debug(
-            f"Estimated width for {cur_col}: {final_width} [Sheet: {worksheet.name}]"
-        )
 
     # Post-pass: grow merged spans to fit their header text.
     if component.merge_equal_headers and idx_by_header:
