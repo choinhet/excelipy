@@ -28,7 +28,7 @@ def python_to_excel_fmt(fmt: str) -> str:
     # Python formats: .2f, ,.1f, .0%, .1%, %, f, d
     # Excel formats start with 0 or #: 0.0%, 0%, #,##0.00
     is_python_num = (
-        bool(re.search(r"\.(\d+)[f%]|^[fd]$|^%$|^,\.\d+f$", fmt)) and not fmt[0] in "0#"
+        bool(re.search(r"\.(\d+)[f%]|^[fd]$|^%$|^,\.\d+f$", fmt)) and fmt[0] not in "0#"
     )
 
     # 2. Handle Python Dates

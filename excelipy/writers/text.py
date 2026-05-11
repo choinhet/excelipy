@@ -1,5 +1,4 @@
 import logging
-from typing import Tuple
 
 from xlsxwriter.workbook import Workbook, Worksheet
 
@@ -15,8 +14,8 @@ def write_text(
         worksheet: Worksheet,
         component: Text,
         default_style: Style,
-        origin: Tuple[int, int] = (0, 0),
-) -> Tuple[int, int]:
+        origin: tuple[int, int] = (0, 0),
+) -> tuple[int, int]:
     log.debug(f"Writing text at {origin}")
 
     processed_style = process_style(

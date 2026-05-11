@@ -348,30 +348,6 @@ def conditional_formatting(out_path: Path):
 
 
 def run_all(
-        skip_existing: bool = True,
-        out_path: Path = RESOURCES / "output",
-):
-    xlsx_out = out_path / "xlsx_output"
-    img_out_path = out_path / "image_output"
-
-    xlsx_out.mkdir(exist_ok=True, parents=True)
-    img_out_path.mkdir(exist_ok=True, parents=True)
-
-    for func in EXAMPLES:
-        name = func.__name__
-
-        cur_path = xlsx_out / f"{name}.xlsx"
-        cur_img_path = img_out_path / f"{name}.png"
-
-        if not skip_existing or not cur_path.exists():
-            log.info(f"Running {name}")
-            func(cur_path)
-
-        if not skip_existing or not cur_img_path.exists():
-            log.info(f"Taking screenshot of {name}")
-            excel2img.export_img(cur_path, cur_img_path.as_posix())
-
-def run_all(
     skip_existing: bool = True,
     out_path: Path = RESOURCES / "output",
 ):

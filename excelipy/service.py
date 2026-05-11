@@ -1,5 +1,5 @@
 import logging
-from typing import Tuple, Dict, Callable, List, Sequence
+from collections.abc import Callable, Sequence
 
 import xlsxwriter
 from xlsxwriter.workbook import Workbook, Worksheet
@@ -21,11 +21,11 @@ def write_component(
         worksheet: Worksheet,
         component: Component,
         default_style: Style,
-        origin: Tuple[int, int] = (0, 0),
-) -> Tuple[int, int]:
-    writing_map: Dict[
+        origin: tuple[int, int] = (0, 0),
+) -> tuple[int, int]:
+    writing_map: dict[
         Callable[..., Component],
-        Callable[..., Tuple[int, int]]
+        Callable[..., tuple[int, int]]
     ] = {
         Table: write_table,
         Text: write_text,
@@ -44,15 +44,15 @@ def write_component(
         origin,
     )
 
-def remove_groups(comp: Component) -> List[Component]:
+def remove_groups(comp: Component) -> list[Component]:
     if not isinstance(comp, Group):
         return [comp]
-    flattened_comps: List[Component] = []
+    flattened_comps: list[Component] = []
     for c in comp.components:
         flattened_comps.extend(remove_groups(c))
     return flattened_comps
 
-def unnest_components(components: Sequence[Component]) -> List[Component]:
+def unnest_components(components: Sequence[Component]) -> list[Component]:
     """
     Removes hierarchical groupings and flattens nested components into a single list.
 

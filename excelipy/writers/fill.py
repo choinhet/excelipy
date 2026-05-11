@@ -1,5 +1,4 @@
 import logging
-from typing import Tuple
 
 from xlsxwriter.workbook import Workbook, Worksheet
 
@@ -14,8 +13,8 @@ def write_fill(
         worksheet: Worksheet,
         component: Fill,
         default_style: Style,
-        origin: Tuple[int, int] = (0, 0),
-) -> Tuple[int, int]:
+        origin: tuple[int, int] = (0, 0),
+) -> tuple[int, int]:
     log.debug(f"Writing fill at {origin}")
 
     style = process_style(workbook, [default_style, component.style])

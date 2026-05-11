@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import io
+from collections.abc import Sequence, Callable
 from pathlib import Path
-from typing import Any, Annotated, List
-from typing import Dict, Optional, Sequence, Literal, Union, Callable
+from typing import Any, Annotated
+from typing import Literal
 
 import pandas as pd
 from pydantic import BaseModel, GetCoreSchemaHandler
@@ -17,38 +18,32 @@ class Style(BaseModel):
     class Config:
         frozen = True
 
-    align: Optional[
-        Literal[
-            "left", "center", "right", "fill", "justify", "center_across", "distributed"
-        ]
-    ] = Field(default=None)
-    background: Optional[str] = Field(default=None)
-    bold: Optional[bool] = Field(default=None)
-    border: Optional[int] = Field(default=None)
-    border_bottom: Optional[int] = Field(default=None)
-    border_color: Optional[str] = Field(default=None)
-    border_left: Optional[int] = Field(default=None)
-    border_right: Optional[int] = Field(default=None)
-    border_top: Optional[int] = Field(default=None)
-    fill_inf: Optional[Union[str, int, float]] = Field(default=None)
-    fill_na: Optional[Union[str, int, float]] = Field(default=None)
-    fill_zero: Optional[str] = Field(default=None)
-    font_color: Optional[str] = Field(default=None)
-    font_family: Optional[str] = Field(default=None)
-    font_size: Optional[int] = Field(default=None)
-    numeric_format: Optional[str] = Field(default=None)
-    padding: Optional[int] = Field(default=None)
-    padding_bottom: Optional[int] = Field(default=None)
-    padding_left: Optional[int] = Field(default=None)
-    padding_right: Optional[int] = Field(default=None)
-    padding_top: Optional[int] = Field(default=None)
-    text_wrap: Optional[bool] = Field(default=None)
-    underline: Optional[Literal[1, 2, 33, 34]] = Field(default=None)
-    valign: Optional[
-        Literal["top", "vcenter", "bottom", "vcenter", "bottom", "vjustify"]
-    ] = Field(default=None)
+    align: Literal["left", "center", "right", "fill", "justify", "center_across", "distributed"] | None = Field(default=None)
+    background: str | None = Field(default=None)
+    bold: bool | None = Field(default=None)
+    border: int | None = Field(default=None)
+    border_bottom: int | None = Field(default=None)
+    border_color: str | None = Field(default=None)
+    border_left: int | None = Field(default=None)
+    border_right: int | None = Field(default=None)
+    border_top: int | None = Field(default=None)
+    fill_inf: str | int | float | None = Field(default=None)
+    fill_na: str | int | float | None = Field(default=None)
+    fill_zero: str | None = Field(default=None)
+    font_color: str | None = Field(default=None)
+    font_family: str | None = Field(default=None)
+    font_size: int | None = Field(default=None)
+    numeric_format: str | None = Field(default=None)
+    padding: int | None = Field(default=None)
+    padding_bottom: int | None = Field(default=None)
+    padding_left: int | None = Field(default=None)
+    padding_right: int | None = Field(default=None)
+    padding_top: int | None = Field(default=None)
+    text_wrap: bool | None = Field(default=None)
+    underline: Literal[1, 2, 33, 34] | None = Field(default=None)
+    valign: Literal["top", "vcenter", "bottom", "vcenter", "bottom", "vjustify"] | None = Field(default=None)
 
-    def merge(self, other: "Style") -> "Style":
+    def merge(self, other: Style) -> Style:
         self_dict = self.model_dump(exclude_none=True)
         other_dict = other.model_dump(exclude_none=True)
         self_dict.update(other_dict)
@@ -159,28 +154,28 @@ class DataFrameAsJsonLines(pd.DataFrame):
 class Table(BaseComponent):
     type: Literal["table"] = Field(default="table")
     data: Annotated[pd.DataFrame, DataFrameAsJsonLines]
-    header_style: Dict[str, Style] = Field(default_factory=dict)
+    header_style: dict[str, Style] = Field(default_factory=dict)
     body_style: Style = Field(default_factory=Style)
-    column_style: Dict[str, Union[Style, Callable[[Any], Style]]] = Field(default_factory=dict)
-    idx_column_style: Dict[int, Union[Style, Callable[[Any], Style]]] = Field(default_factory=dict)
-    column_width: Dict[str, int] = Field(default_factory=dict)
-    idx_column_width: Dict[int, int] = Field(default_factory=dict)
-    row_style: Dict[int, Style] = Field(default_factory=dict)
-    max_col_width: Optional[int] = Field(default=None)
+    column_style: dict[str, Style | Callable[[Any], Style]] = Field(default_factory=dict)
+    idx_column_style: dict[int, Style | Callable[[Any], Style]] = Field(default_factory=dict)
+    column_width: dict[str, int] = Field(default_factory=dict)
+    idx_column_width: dict[int, int] = Field(default_factory=dict)
+    row_style: dict[int, Style] = Field(default_factory=dict)
+    max_col_width: int | None = Field(default=None)
     header_filters: bool = Field(default=True)
     default_style: bool = Field(default=True)
-    auto_width_tuning: Optional[int] = Field(default=None)
-    auto_width_padding: Optional[int] = Field(default=None)
+    auto_width_tuning: int | None = Field(default=None)
+    auto_width_padding: int | None = Field(default=None)
     merge_equal_headers: bool = Field(default=True)
     wrap_header: bool = Field(default=False)
-    max_col_size: Optional[int] = Field(default=None)
-    min_col_size: Optional[int] = Field(default=None)
+    max_col_size: int | None = Field(default=None)
+    min_col_size: int | None = Field(default=None)
 
     def with_stripes(
         self,
         color: str = "#D0D0D0",
         pattern: Literal["even", "odd"] = "odd",
-    ) -> "Table":
+    ) -> Table:
         return self.model_copy(
             update=dict(
                 row_style={
@@ -199,25 +194,25 @@ class Table(BaseComponent):
 class Group(BaseModel):
     type: Literal["group"] = Field(default="group")
     name: str = Field(default="")
-    components: Sequence["Component"] = Field(default_factory=list)
+    components: Sequence[Component] = Field(default_factory=list)
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 Component = Annotated[
-    Union[Text, Link, Fill, Image, Table, Group],
+    Text | Link | Fill | Image | Table | Group,
     Field(discriminator="type"),
 ]
 
 
 class Sheet(BaseModel):
     name: str
-    components: List[Component] = Field(default_factory=list)
+    components: list[Component] = Field(default_factory=list)
     grid_lines: bool = Field(default=True)
     style: Style = Field(default_factory=Style)
 
 
 class Excel(BaseModel):
-    path: Union[Path, io.BytesIO]
-    sheets: List[Sheet] = Field(default_factory=list)
+    path: Path | io.BytesIO
+    sheets: list[Sheet] = Field(default_factory=list)
     nan_inf_to_errors: bool = Field(default=True)
     model_config = ConfigDict(arbitrary_types_allowed=True)

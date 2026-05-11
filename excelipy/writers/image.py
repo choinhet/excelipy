@@ -1,5 +1,4 @@
 import logging
-from typing import Tuple
 
 from PIL import Image as PILImage
 from xlsxwriter.workbook import Workbook, Worksheet
@@ -18,8 +17,8 @@ def write_image(
         worksheet: Worksheet,
         component: Image,
         default_style: Style,
-        origin: Tuple[int, int] = (0, 0),
-) -> Tuple[int, int]:
+        origin: tuple[int, int] = (0, 0),
+) -> tuple[int, int]:
     log.debug(f"Writing image at {origin}")
     with PILImage.open(component.path) as img:
         img_w, img_h = img.size

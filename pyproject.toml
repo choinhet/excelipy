@@ -3,7 +3,7 @@ name = "excelipy"
 version = "1.1.12"
 description = "Wrapper around xlsxwriter to improve usability"
 readme = "README.md"
-requires-python = ">=3.9.10"
+requires-python = ">=3.10"
 
 dependencies = [
     "numpy>=2.0.2",
@@ -26,6 +26,7 @@ dev = [
     "excel2img>=1.4.0; sys_platform == 'win32'",
     "duckdb>=1.4.3",
     "matplotlib>=3.9.4",
+    "ruff>=0.15.12",
 ]
 
 [tool.setuptools]

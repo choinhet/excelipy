@@ -2,7 +2,7 @@ import logging
 import math
 from collections import defaultdict
 from functools import reduce, wraps, lru_cache
-from typing import Tuple, Dict, Optional, Set, Any
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -49,7 +49,7 @@ def _col_style_chain(
         col_name: str,
         col_idx: int,
         default_style: Style,
-) -> Tuple[Style, ...]:
+) -> tuple[Style, ...]:
     return (
         default_style,
         component.style,
@@ -58,7 +58,7 @@ def _col_style_chain(
     )
 
 
-def _apply_numeric_format(value: Any, numeric_format: Optional[str]) -> str:
+def _apply_numeric_format(value: Any, numeric_format: str | None) -> str:
     """
     Format a cell value using its numeric format string for display-width measurement.
     Falls back to str() if the value is not numeric or format is not applicable.
@@ -84,14 +84,14 @@ def _apply_numeric_format(value: Any, numeric_format: Optional[str]) -> str:
     return str(value)
 
 
-def get_style_font_family(*styles: Style | None) -> Optional[str]:
+def get_style_font_family(*styles: Style | None) -> str | None:
     cur_font = None
     for s in filter(None, styles):
         cur_font = s.font_family or cur_font
     return cur_font
 
 
-def get_style_font_size(*styles: Style | None) -> Optional[int]:
+def get_style_font_size(*styles: Style | None) -> int | None:
     cur_font = None
     for s in filter(None, styles):
         cur_font = s.font_size or cur_font
@@ -118,8 +118,8 @@ def _load_font(
 
 def get_text_size(
         text: str,
-        font_size: Optional[int] = None,
-        font_family: Optional[str] = None,
+        font_size: int | None = None,
+        font_family: str | None = None,
 ) -> float:
     text = str(text)
     cur_font_size = font_size or DEFAULT_FONT_SIZE
@@ -140,7 +140,7 @@ def _header_font(
         cur_col: str,
         component: Table,
         default_style: Style,
-) -> Tuple[Optional[int], Optional[str]]:
+) -> tuple[int | None, str | None]:
     font_size = get_style_font_size(
         DEFAULT_HEADER_STYLE,
         default_style,
@@ -179,7 +179,7 @@ def _count_lines(text: str, text_px: float, col_px: float) -> int:
     return result
 
 
-def _row_height_for_lines(lines: int, font_size: Optional[int]) -> float:
+def _row_height_for_lines(lines: int, font_size: int | None) -> float:
     fs = font_size or DEFAULT_FONT_SIZE
     return max(DEFAULT_ROW_HEIGHT, fs * 1.3 * lines)
 
@@ -189,8 +189,8 @@ def _row_height_for_lines(lines: int, font_size: Optional[int]) -> float:
 # ---------------------------------------------------------------------------
 
 
-def _get_sheet_cache(workbook: Workbook, worksheet: Worksheet) -> Dict[int, float]:
-    cache: Dict[str, Dict[int, float]] = getattr(
+def _get_sheet_cache(workbook: Workbook, worksheet: Worksheet) -> dict[int, float]:
+    cache: dict[str, dict[int, float]] = getattr(
         workbook, "_excelipy_col_size_cache", {}
     )
     return cache.setdefault(worksheet.name, {})
@@ -201,8 +201,8 @@ def _set_col_width(
         worksheet: Worksheet,
         abs_col_idx: int,
         width: float,
-        min_col_size: Optional[float],
-        max_col_size: Optional[float],
+        min_col_size: float | None,
+        max_col_size: float | None,
 ) -> float:
     """
     Clamp width to [min_col_size, max_col_size], then persist the maximum
@@ -289,9 +289,9 @@ def _fix_merged_header_widths(
         workbook: Workbook,
         worksheet: Worksheet,
         component: Table,
-        idx_by_header: Dict[str, list],
-        origin: Tuple[int, int],
-        this_table_widths: Dict[int, float],
+        idx_by_header: dict[str, list],
+        origin: tuple[int, int],
+        this_table_widths: dict[int, float],
         default_style: Style,
 ) -> None:
     """
@@ -338,8 +338,8 @@ def _fix_merged_header_widths(
 
 def _calc_header_height(
         component: Table,
-        idx_by_header: Dict[str, list],
-        this_table_widths: Dict[int, float],
+        idx_by_header: dict[str, list],
+        this_table_widths: dict[int, float],
         default_style: Style,
 ) -> float:
     """
@@ -360,7 +360,7 @@ def _calc_header_height(
 
     # Merged headers: span width is the sum of all columns in the group,
     # each clamped individually (matching what _set_col_width does per column).
-    merged_col_indices: Set[int] = set()
+    merged_col_indices: set[int] = set()
     for cur_col, indices in idx_by_header.items():
         font_size, font_family = _header_font(cur_col, component, default_style)
         max_font_size = max(max_font_size, font_size or DEFAULT_FONT_SIZE)
@@ -386,7 +386,7 @@ def _calc_header_height(
 
 def _calc_body_row_height(
         row: pd.Series,
-        col_widths: Dict[int, float],
+        col_widths: dict[int, float],
         component: Table,
         default_style: Style,
 ) -> float:
@@ -432,13 +432,13 @@ def write_table(
         worksheet: Worksheet,
         component: Table,
         default_style: Style,
-        origin: Tuple[int, int] = (0, 0),
-) -> Tuple[int, int]:
+        origin: tuple[int, int] = (0, 0),
+) -> tuple[int, int]:
     x_size = component.data.shape[1]
     y_size = component.data.shape[0] + 1  # +1 for the header row
 
     # Build merged-header index: consecutive columns sharing the same name.
-    idx_by_header: Dict[str, list] = defaultdict(list)
+    idx_by_header: dict[str, list] = defaultdict(list)
     if component.merge_equal_headers:
         for idx, cur_col in enumerate(component.data.columns):
             existing = idx_by_header[cur_col]
@@ -446,7 +446,7 @@ def write_table(
                 existing.append(idx)
         idx_by_header = {k: v for k, v in idx_by_header.items() if len(v) >= 2}
 
-    merged_col_indices: Set[int] = {
+    merged_col_indices: set[int] = {
         i for indices in idx_by_header.values() for i in indices
     }
 
@@ -457,8 +457,8 @@ def write_table(
     #   so merged header deficit calculations are isolated from other tables.
     # final_table_widths: post-clamp widths actually set on the sheet, used by
     #   row height calculations so line-wrap estimates match what Excel renders.
-    this_table_widths: Dict[int, float] = {}
-    final_table_widths: Dict[int, float] = {}
+    this_table_widths: dict[int, float] = {}
+    final_table_widths: dict[int, float] = {}
 
     # ------------------------------------------------------------------ headers
     for col_idx, cur_col in enumerate(component.data.columns):
