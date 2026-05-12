@@ -257,6 +257,7 @@ def get_auto_width(
     for s in chain_styles:
         numeric_fmt = s.numeric_format or numeric_fmt
 
+    data = data.reset_index(drop=True)
     max_body_text = str(
         data.iloc[
             (
