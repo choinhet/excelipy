@@ -40,13 +40,13 @@ addopts = """
     --cov=excelipy
     --cov-report=xml
     --cov-report=term-missing
-    --ignore=examples.py
+    --ignore=tests/examples.py
 """
 testpaths = ["tests", "excelipy"]
 doctest_optionflags = ["ELLIPSIS", "NORMALIZE_WHITESPACE"]
 
 [tool.coverage.run]
-omit = ["*/temp/*", "*examples.py"]
+omit = ["*/temp/*"]
 
 [tool.ruff]
 target-version = "py310"
