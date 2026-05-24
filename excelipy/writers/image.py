@@ -13,11 +13,11 @@ DEFAULT_ROW_HEIGHT = 20
 
 
 def write_image(
-        workbook: Workbook,
-        worksheet: Worksheet,
-        component: Image,
-        default_style: Style,
-        origin: tuple[int, int] = (0, 0),
+    workbook: Workbook,
+    worksheet: Worksheet,
+    component: Image,
+    default_style: Style,
+    origin: tuple[int, int] = (0, 0),
 ) -> tuple[int, int]:
     log.debug(f"Writing image at {origin}")
     with PILImage.open(component.path) as img:
@@ -46,9 +46,9 @@ def write_image(
         origin[0],
         component.path.as_posix(),
         {
-            'x_scale': scale_width,
-            'y_scale': scale_height,
-            'object_position': 1,  # Move and size with cells
+            "x_scale": scale_width,
+            "y_scale": scale_height,
+            "object_position": 1,  # Move and size with cells
         },
     )
     return component.width, component.height

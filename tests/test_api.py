@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 import excelipy as ep
-from test import resources
+from tests import resources
 
 
 @pytest.fixture
@@ -252,11 +252,16 @@ def test_serialization_and_deserialization(sample_df: pd.DataFrame):
 def test_load_ai_guide():
     assert isinstance(ep.AI_GUIDE, str)
 
+
 def test_big_columns():
-    df = pd.DataFrame({"Big-Title-" * 18: [
-        "big_content-" * 10,
-        "big_content-" * 5,
-        ]})
+    df = pd.DataFrame(
+        {
+            "Big-Title-" * 18: [
+                "big_content-" * 10,
+                "big_content-" * 5,
+            ]
+        }
+    )
 
     buf = io.BytesIO()
     ep.save(

@@ -135,7 +135,7 @@ ep.save(
 By default, `ep.Table` renders a `pandas.DataFrame` with standard formatting, including header filters and automatic
 column width adjustment.
 
-![displaying_a_table.png](test/resources/output/image_output/displaying_a_table.png)
+![displaying_a_table.png](tests/resources/output/image_output/displaying_a_table.png)
 
 ### Basic column formatting
 
@@ -169,7 +169,7 @@ ep.save(
 
 The output shows bold, centered headers and a formatted numeric column.
 
-![basic_column_formatting.png](test/resources/output/image_output/basic_column_formatting.png)
+![basic_column_formatting.png](tests/resources/output/image_output/basic_column_formatting.png)
 
 ### Adding a title
 
@@ -215,7 +215,7 @@ ep.save(
 
 The resulting Excel sheet features a stylized title spanning across the top of the table.
 
-![adding_a_title.png](test/resources/output/image_output/adding_a_title.png)
+![adding_a_title.png](tests/resources/output/image_output/adding_a_title.png)
 
 ### Category coloring
 
@@ -254,7 +254,7 @@ ep.save(
 
 Each store now has its own unique color coding in the "Store" column.
 
-![category_coloring.png](test/resources/output/image_output/category_coloring.png)
+![category_coloring.png](tests/resources/output/image_output/category_coloring.png)
 
 ### Merging columns
 
@@ -297,7 +297,7 @@ ep.save(
 
 The header columns are merged into one, and the body cells are centered.
 
-![merging_columns.png](test/resources/output/image_output/merging_columns.png)
+![merging_columns.png](tests/resources/output/image_output/merging_columns.png)
 
 ### Conditional formatting
 
@@ -356,7 +356,7 @@ ep.save(
 The final output features conditional red text for below-average sales, a descriptive footer box, and no visible grid
 lines.
 
-![conditional_formatting.png](test/resources/output/image_output/conditional_formatting.png)
+![conditional_formatting.png](tests/resources/output/image_output/conditional_formatting.png)
 
 ### Extra
 

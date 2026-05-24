@@ -17,17 +17,16 @@ __all__ = [
 
 from excelipy.const import AI_GUIDE
 from excelipy.models import (
-    Style,
     Component,
-    Fill,
-    Image,
-    Text,
-    Table,
-    Sheet,
     Excel,
-    Link,
+    Fill,
     Group,
+    Image,
+    Link,
+    Sheet,
+    Style,
+    Table,
+    Text,
 )
-
 from excelipy.service import save, unnest_components
 from excelipy.writers.table import row_wise

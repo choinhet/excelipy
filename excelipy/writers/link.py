@@ -2,7 +2,7 @@ import logging
 
 from xlsxwriter.workbook import Workbook, Worksheet
 
-from excelipy.models import Style, Link
+from excelipy.models import Link, Style
 from excelipy.style import process_style
 from excelipy.styles.link import DEFAULT_LINK_STYLE
 
@@ -10,11 +10,11 @@ log = logging.getLogger("excelipy")
 
 
 def write_link(
-        workbook: Workbook,
-        worksheet: Worksheet,
-        component: Link,
-        default_style: Style,
-        origin: tuple[int, int] = (0, 0),
+    workbook: Workbook,
+    worksheet: Worksheet,
+    component: Link,
+    default_style: Style,
+    origin: tuple[int, int] = (0, 0),
 ) -> tuple[int, int]:
     log.debug(f"Writing link at {origin}")
 
@@ -32,7 +32,14 @@ def write_link(
     height = component.height
 
     if component.merged and (width > 1 or height > 1):
-        worksheet.merge_range(row0, col0, row0 + height - 1, col0 + width - 1, component.text, processed_style)
+        worksheet.merge_range(
+            row0,
+            col0,
+            row0 + height - 1,
+            col0 + width - 1,
+            component.text,
+            processed_style,
+        )
         worksheet.write_url(row0, col0, component.url, processed_style, component.text)
     else:
         for dy in range(height):
@@ -40,7 +47,9 @@ def write_link(
                 row = row0 + dy
                 col = col0 + dx
                 if dy == 0 and dx == 0:
-                    worksheet.write_url(row, col, component.url, processed_style, component.text)
+                    worksheet.write_url(
+                        row, col, component.url, processed_style, component.text
+                    )
                 else:
                     worksheet.write_blank(row, col, "", processed_style)
 

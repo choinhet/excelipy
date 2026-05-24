@@ -1,6 +1,6 @@
 [project]
 name = "excelipy"
-version = "1.1.13"
+version = "1.1.14"
 description = "Wrapper around xlsxwriter to improve usability"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -19,14 +19,13 @@ dev = [
     "pytest-cov>=4.1.0",
     "coverage>=7.6.1",
     "pytest-mock>=3.14.0",
-    "pytest-asyncio>=0.25.3",
     "debugpy>=1.8.13",
-    "pyright>=1.1.398",
     "pyarrow>=21.0.0",
     "excel2img>=1.4.0; sys_platform == 'win32'",
     "duckdb>=1.4.3",
     "matplotlib>=3.9.4",
     "ruff>=0.15.12",
+    "ty>=0.0.39",
 ]
 
 [tool.setuptools]
@@ -34,3 +33,21 @@ packages = ["excelipy"]
 
 [tool.setuptools.package-data]
 excelipy = ["py.typed"]
+
+[tool.pytest.ini_options]
+addopts = "--doctest-modules --cov=excelipy --cov-report=xml --cov-report=term-missing"
+testpaths = ["tests", "excelipy"]
+doctest_optionflags = ["ELLIPSIS", "NORMALIZE_WHITESPACE"]
+
+[tool.coverage.run]
+omit = ["*/temp/*"]
+
+[tool.ruff]
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"

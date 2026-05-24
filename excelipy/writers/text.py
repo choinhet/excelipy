@@ -10,11 +10,11 @@ log = logging.getLogger("excelipy")
 
 
 def write_text(
-        workbook: Workbook,
-        worksheet: Worksheet,
-        component: Text,
-        default_style: Style,
-        origin: tuple[int, int] = (0, 0),
+    workbook: Workbook,
+    worksheet: Worksheet,
+    component: Text,
+    default_style: Style,
+    origin: tuple[int, int] = (0, 0),
 ) -> tuple[int, int]:
     log.debug(f"Writing text at {origin}")
 

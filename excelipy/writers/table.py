@@ -1,7 +1,7 @@
 import logging
 import math
 from collections import defaultdict
-from functools import reduce, wraps, lru_cache
+from functools import lru_cache, reduce, wraps
 from typing import Any
 
 import numpy as np
@@ -10,9 +10,9 @@ from PIL import ImageFont
 from xlsxwriter.workbook import Workbook, Worksheet
 
 from excelipy.const import python_to_excel_fmt
-from excelipy.models import Style, Table, Link
+from excelipy.models import Link, Style, Table
 from excelipy.style import process_style
-from excelipy.styles.table import DEFAULT_HEADER_STYLE, DEFAULT_BODY_STYLE
+from excelipy.styles.table import DEFAULT_BODY_STYLE, DEFAULT_HEADER_STYLE
 
 log = logging.getLogger("excelipy")
 
@@ -45,10 +45,10 @@ def _static_col_style(component: Table, col_name: str, col_idx: int) -> Style:
 
 
 def _col_style_chain(
-        component: Table,
-        col_name: str,
-        col_idx: int,
-        default_style: Style,
+    component: Table,
+    col_name: str,
+    col_idx: int,
+    default_style: Style,
 ) -> tuple[Style, ...]:
     return (
         default_style,
@@ -61,7 +61,7 @@ def _col_style_chain(
 def _apply_numeric_format(value: Any, numeric_format: str | None) -> str:
     """
     Format a cell value using its numeric format string for display-width measurement.
-    Falls back to str() if the value is not numeric or format is not applicable.
+    Falls back to str() if the value is not numeric or a format is not applicable.
     """
     if numeric_format is None or numeric_format == "General":
         return str(value)
@@ -105,7 +105,7 @@ def get_style_font_size(*styles: Style | None) -> int | None:
 
 @lru_cache(maxsize=32)
 def _load_font(
-        font_family: str, font_size: int
+    font_family: str, font_size: int
 ) -> ImageFont.ImageFont | ImageFont.FreeTypeFont:
     try:
         return ImageFont.truetype(f"{font_family.lower()}.ttf", font_size)
@@ -117,9 +117,9 @@ def _load_font(
 
 
 def get_text_size(
-        text: str,
-        font_size: int | None = None,
-        font_family: str | None = None,
+    text: str,
+    font_size: int | None = None,
+    font_family: str | None = None,
 ) -> float:
     text = str(text)
     cur_font_size = font_size or DEFAULT_FONT_SIZE
@@ -137,9 +137,9 @@ def _excel_to_px(excel_units: float, tuning: int, padding: int) -> float:
 
 
 def _header_font(
-        cur_col: str,
-        component: Table,
-        default_style: Style,
+    cur_col: str,
+    component: Table,
+    default_style: Style,
 ) -> tuple[int | None, str | None]:
     font_size = get_style_font_size(
         DEFAULT_HEADER_STYLE,
@@ -157,11 +157,11 @@ def _header_font(
 
 
 def _header_excel_width(
-        cur_col: str,
-        component: Table,
-        tuning: int,
-        padding: int,
-        default_style: Style,
+    cur_col: str,
+    component: Table,
+    tuning: int,
+    padding: int,
+    default_style: Style,
 ) -> float:
     font_size, font_family = _header_font(cur_col, component, default_style)
     return _px_to_excel(get_text_size(cur_col, font_size, font_family), tuning, padding)
@@ -197,12 +197,12 @@ def _get_sheet_cache(workbook: Workbook, worksheet: Worksheet) -> dict[int, floa
 
 
 def _set_col_width(
-        workbook: Workbook,
-        worksheet: Worksheet,
-        abs_col_idx: int,
-        width: float,
-        min_col_size: float | None,
-        max_col_size: float | None,
+    workbook: Workbook,
+    worksheet: Worksheet,
+    abs_col_idx: int,
+    width: float,
+    min_col_size: float | None,
+    max_col_size: float | None,
 ) -> float:
     """
     Clamp width to [min_col_size, max_col_size], then persist the maximum
@@ -232,12 +232,12 @@ def _set_col_width(
 
 
 def get_auto_width(
-        cur_col: str,
-        col_idx: int,
-        data: pd.Series,
-        component: Table,
-        default_style: Style,
-        is_merged_header: bool = False,
+    cur_col: str,
+    col_idx: int,
+    data: pd.Series,
+    component: Table,
+    default_style: Style,
+    is_merged_header: bool = False,
 ) -> float:
     tuning = component.auto_width_tuning or TUNING_DEFAULT
     padding = component.auto_width_padding or PADDING_DEFAULT
@@ -258,15 +258,19 @@ def get_auto_width(
         numeric_fmt = s.numeric_format or numeric_fmt
 
     data = data.reset_index(drop=True)
-    max_body_text = str(
-        data.iloc[
-            (
-                data.apply(lambda v: _apply_numeric_format(v, numeric_fmt))
-                .apply(len)
-                .idxmax()
-            )
-        ]
-    ) if not data.empty else ""
+    max_body_text = (
+        str(
+            data.iloc[
+                (
+                    data.apply(lambda v: _apply_numeric_format(v, numeric_fmt))
+                    .apply(len)
+                    .idxmax()
+                )
+            ]
+        )
+        if not data.empty
+        else ""
+    )
     body_px = get_text_size(max_body_text, col_font_size, col_font_family)
 
     if not is_merged_header:
@@ -287,13 +291,13 @@ def get_auto_width(
 
 
 def _fix_merged_header_widths(
-        workbook: Workbook,
-        worksheet: Worksheet,
-        component: Table,
-        idx_by_header: dict[str, list],
-        origin: tuple[int, int],
-        this_table_widths: dict[int, float],
-        default_style: Style,
+    workbook: Workbook,
+    worksheet: Worksheet,
+    component: Table,
+    idx_by_header: dict[str, list],
+    origin: tuple[int, int],
+    this_table_widths: dict[int, float],
+    default_style: Style,
 ) -> None:
     """
     Ensure each merged span is wide enough to contain its header text.
@@ -338,10 +342,10 @@ def _fix_merged_header_widths(
 
 
 def _calc_header_height(
-        component: Table,
-        idx_by_header: dict[str, list],
-        this_table_widths: dict[int, float],
-        default_style: Style,
+    component: Table,
+    idx_by_header: dict[str, list],
+    this_table_widths: dict[int, float],
+    default_style: Style,
 ) -> float:
     """
     Estimate the header row height based on how many lines each header cell
@@ -386,10 +390,10 @@ def _calc_header_height(
 
 
 def _calc_body_row_height(
-        row: pd.Series,
-        col_widths: dict[int, float],
-        component: Table,
-        default_style: Style,
+    row: pd.Series,
+    col_widths: dict[int, float],
+    component: Table,
+    default_style: Style,
 ) -> float:
     """
     Estimate the body row height based on the widest content in each cell.
@@ -429,11 +433,11 @@ def _calc_body_row_height(
 
 
 def write_table(
-        workbook: Workbook,
-        worksheet: Worksheet,
-        component: Table,
-        default_style: Style,
-        origin: tuple[int, int] = (0, 0),
+    workbook: Workbook,
+    worksheet: Worksheet,
+    component: Table,
+    default_style: Style,
+    origin: tuple[int, int] = (0, 0),
 ) -> tuple[int, int]:
     x_size = component.data.shape[1]
     y_size = component.data.shape[0] + 1  # +1 for the header row

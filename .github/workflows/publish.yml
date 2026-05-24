@@ -14,7 +14,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.9'
+          python-version: '3.10'
       
       - name: Install UV
         run: pip install uv
@@ -23,7 +23,7 @@ jobs:
         run: uv sync --dev
       
       - name: Run unit tests with coverage
-        run: uv run pytest test/ --cov=excelipy --cov-report=xml
+        run: uv run pytest
       
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4
@@ -45,7 +45,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.9'
+          python-version: '3.10'
       
       - name: Install UV
         run: pip install uv

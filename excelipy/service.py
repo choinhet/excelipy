@@ -4,29 +4,36 @@ from collections.abc import Callable, Sequence
 import xlsxwriter
 from xlsxwriter.workbook import Workbook, Worksheet
 
-from excelipy.models import Component, Excel, Fill, Style, Table, Text, Image, Link, Group
+from excelipy.models import (
+    Component,
+    Excel,
+    Fill,
+    Group,
+    Image,
+    Link,
+    Style,
+    Table,
+    Text,
+)
 from excelipy.writers import (
     write_fill,
-    write_table,
-    write_text,
     write_image,
     write_link,
+    write_table,
+    write_text,
 )
 
 log = logging.getLogger("excelipy")
 
 
 def write_component(
-        workbook: Workbook,
-        worksheet: Worksheet,
-        component: Component,
-        default_style: Style,
-        origin: tuple[int, int] = (0, 0),
+    workbook: Workbook,
+    worksheet: Worksheet,
+    component: Component,
+    default_style: Style,
+    origin: tuple[int, int] = (0, 0),
 ) -> tuple[int, int]:
-    writing_map: dict[
-        Callable[..., Component],
-        Callable[..., tuple[int, int]]
-    ] = {
+    writing_map: dict[Callable[..., Component], Callable[..., tuple[int, int]]] = {
         Table: write_table,
         Text: write_text,
         Link: write_link,
@@ -44,6 +51,7 @@ def write_component(
         origin,
     )
 
+
 def remove_groups(comp: Component) -> list[Component]:
     if not isinstance(comp, Group):
         return [comp]
@@ -51,6 +59,7 @@ def remove_groups(comp: Component) -> list[Component]:
     for c in comp.components:
         flattened_comps.extend(remove_groups(c))
     return flattened_comps
+
 
 def unnest_components(components: Sequence[Component]) -> list[Component]:
     """
@@ -66,10 +75,14 @@ def unnest_components(components: Sequence[Component]) -> list[Component]:
     unnested_comps = [c for comps in nested_comps for c in comps]
     return unnested_comps
 
+
 def save(excel: Excel):
-    with xlsxwriter.Workbook(excel.path, {
-        "nan_inf_to_errors": excel.nan_inf_to_errors,
-    }) as workbook:
+    with xlsxwriter.Workbook(
+        excel.path,
+        {
+            "nan_inf_to_errors": excel.nan_inf_to_errors,
+        },
+    ) as workbook:
         for sheet in excel.sheets:
             origin = (
                 sheet.style.pl(),
@@ -91,4 +104,7 @@ def save(excel: Excel):
                     sheet.style,
                     cur_origin,
                 )
-                origin = origin[0] + component.style.pr(), origin[1] + y + component.style.pb()
+                origin = (
+                    origin[0] + component.style.pr(),
+                    origin[1] + y + component.style.pb(),
+                )

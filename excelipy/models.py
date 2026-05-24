@@ -1,24 +1,28 @@
-from __future__ import annotations
-
 import io
-from collections.abc import Sequence, Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any, Annotated
-from typing import Literal
+from typing import Annotated, Any, Literal
 
 import pandas as pd
-from pydantic import BaseModel, GetCoreSchemaHandler
-from pydantic import Field, ConfigDict
-from pydantic import GetJsonSchemaHandler
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    GetCoreSchemaHandler,
+    GetJsonSchemaHandler,
+)
 from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import core_schema
+from typing_extensions import Self
+
+AlignOptions = Literal[
+    "left", "center", "right", "fill", "justify", "center_across", "distributed"
+]
+VAlignOptions = Literal["top", "vcenter", "bottom", "vcenter", "bottom", "vjustify"]
 
 
 class Style(BaseModel):
-    class Config:
-        frozen = True
-
-    align: Literal["left", "center", "right", "fill", "justify", "center_across", "distributed"] | None = Field(default=None)
+    align: AlignOptions | None = Field(default=None)
     background: str | None = Field(default=None)
     bold: bool | None = Field(default=None)
     border: int | None = Field(default=None)
@@ -41,9 +45,11 @@ class Style(BaseModel):
     padding_top: int | None = Field(default=None)
     text_wrap: bool | None = Field(default=None)
     underline: Literal[1, 2, 33, 34] | None = Field(default=None)
-    valign: Literal["top", "vcenter", "bottom", "vcenter", "bottom", "vjustify"] | None = Field(default=None)
+    valign: VAlignOptions | None = Field(default=None)
 
-    def merge(self, other: Style) -> Style:
+    model_config = ConfigDict(frozen=True)
+
+    def merge(self, other: Self) -> Self:
         self_dict = self.model_dump(exclude_none=True)
         other_dict = other.model_dump(exclude_none=True)
         self_dict.update(other_dict)
@@ -156,8 +162,12 @@ class Table(BaseComponent):
     data: Annotated[pd.DataFrame, DataFrameAsJsonLines]
     header_style: dict[str, Style] = Field(default_factory=dict)
     body_style: Style = Field(default_factory=Style)
-    column_style: dict[str, Style | Callable[[Any], Style]] = Field(default_factory=dict)
-    idx_column_style: dict[int, Style | Callable[[Any], Style]] = Field(default_factory=dict)
+    column_style: dict[str, Style | Callable[[Any], Style]] = Field(
+        default_factory=dict
+    )
+    idx_column_style: dict[int, Style | Callable[[Any], Style]] = Field(
+        default_factory=dict
+    )
     column_width: dict[str, int] = Field(default_factory=dict)
     idx_column_width: dict[int, int] = Field(default_factory=dict)
     row_style: dict[int, Style] = Field(default_factory=dict)
@@ -175,7 +185,7 @@ class Table(BaseComponent):
         self,
         color: str = "#D0D0D0",
         pattern: Literal["even", "odd"] = "odd",
-    ) -> Table:
+    ) -> Self:
         return self.model_copy(
             update=dict(
                 row_style={
@@ -194,7 +204,7 @@ class Table(BaseComponent):
 class Group(BaseModel):
     type: Literal["group"] = Field(default="group")
     name: str = Field(default="")
-    components: Sequence[Component] = Field(default_factory=list)
+    components: Sequence["Component"] = Field(default_factory=list)
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
 

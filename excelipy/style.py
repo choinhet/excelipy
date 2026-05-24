@@ -2,7 +2,7 @@ from collections.abc import Sequence
 
 from xlsxwriter.workbook import Format, Workbook
 
-from excelipy.const import PROP_MAP, PRE_PROCESS_MAP
+from excelipy.const import PRE_PROCESS_MAP, PROP_MAP
 from excelipy.models import Style
 
 
@@ -18,8 +18,8 @@ def _process_single(workbook: Workbook, style: Style) -> Format:
 
 
 def process_style(
-        workbook: Workbook,
-        styles: Sequence[Style],
+    workbook: Workbook,
+    styles: Sequence[Style],
 ) -> Format:
     styles = list(filter(None, styles))
     cur_style = Style()

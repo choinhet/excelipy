@@ -9,7 +9,7 @@ from matplotlib import pyplot as plt
 from matplotlib.colors import rgb2hex, to_rgb
 
 import excelipy as ep
-from test import resources
+from tests import resources
 
 RESOURCES = Path(str(files(resources)))
 log = logging.getLogger("excelipy")
@@ -371,6 +371,7 @@ def run_all(
             log.info(f"Taking screenshot of {name}")
             excel2img.export_img(cur_path, cur_img_path.as_posix())
 
+
 @example
 def formatting_dates(out_path: Path):
     df = pd.DataFrame({"Date": pd.date_range("2022-01-01", periods=10)})
@@ -383,15 +384,14 @@ def formatting_dates(out_path: Path):
                     components=[
                         ep.Table(
                             data=df,
-                            column_style={
-                                "Date": ep.Style(numeric_format="%d - %B")
-                            }
+                            column_style={"Date": ep.Style(numeric_format="%d - %B")},
                         ),
-                    ]
+                    ],
                 )
             ],
         )
     )
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
