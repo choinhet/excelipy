@@ -2,7 +2,6 @@ import logging
 from collections.abc import Callable, Sequence
 
 import xlsxwriter
-from xlsxwriter.workbook import Workbook, Worksheet
 
 from excelipy.models import (
     Component,
@@ -11,7 +10,6 @@ from excelipy.models import (
     Group,
     Image,
     Link,
-    Style,
     Table,
     Text,
 )
@@ -25,31 +23,13 @@ from excelipy.writers import (
 
 log = logging.getLogger("excelipy")
 
-
-def write_component(
-    workbook: Workbook,
-    worksheet: Worksheet,
-    component: Component,
-    default_style: Style,
-    origin: tuple[int, int] = (0, 0),
-) -> tuple[int, int]:
-    writing_map: dict[Callable[..., Component], Callable[..., tuple[int, int]]] = {
-        Table: write_table,
-        Text: write_text,
-        Link: write_link,
-        Fill: write_fill,
-        Image: write_image,
-    }
-
-    render_func = writing_map.get(type(component))
-
-    return render_func(
-        workbook,
-        worksheet,
-        component,
-        default_style,
-        origin,
-    )
+WRITING_MAP: dict[type[Component], Callable[..., tuple[int, int]]] = {
+    Table: write_table,
+    Text: write_text,
+    Link: write_link,
+    Fill: write_fill,
+    Image: write_image,
+}
 
 
 def remove_groups(comp: Component) -> list[Component]:
@@ -77,18 +57,14 @@ def unnest_components(components: Sequence[Component]) -> list[Component]:
 
 
 def save(excel: Excel):
-    with xlsxwriter.Workbook(
-        excel.path,
-        {
-            "nan_inf_to_errors": excel.nan_inf_to_errors,
-        },
-    ) as workbook:
+    workbook_args = {
+        "nan_inf_to_errors": excel.nan_inf_to_errors,
+    }
+    with xlsxwriter.Workbook(excel.path, workbook_args) as workbook:
         for sheet in excel.sheets:
-            origin = (
-                sheet.style.pl(),
-                sheet.style.pt(),
-            )
+            origin = (sheet.style.pl(), sheet.style.pt())
             worksheet = workbook.add_worksheet(sheet.name)
+
             if not sheet.grid_lines:
                 worksheet.hide_gridlines(2)
 
@@ -97,7 +73,7 @@ def save(excel: Excel):
                     origin[0] + component.style.pl(),
                     origin[1] + component.style.pt(),
                 )
-                x, y = write_component(
+                _, y = WRITING_MAP[type(component)](
                     workbook,
                     worksheet,
                     component,
