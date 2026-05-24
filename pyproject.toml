@@ -35,7 +35,13 @@ packages = ["excelipy"]
 excelipy = ["py.typed"]
 
 [tool.pytest.ini_options]
-addopts = "--doctest-modules --cov=excelipy --cov-report=xml --cov-report=term-missing --ignore examples.py"
+addopts = """
+    --doctest-modules
+    --cov=excelipy
+    --cov-report=xml
+    --cov-report=term-missing
+    --ignore=examples.py
+"""
 testpaths = ["tests", "excelipy"]
 doctest_optionflags = ["ELLIPSIS", "NORMALIZE_WHITESPACE"]
 
