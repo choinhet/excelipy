@@ -10,6 +10,7 @@ from pydantic import (
     Field,
     GetCoreSchemaHandler,
     GetJsonSchemaHandler,
+    model_validator,
 )
 from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import core_schema
@@ -81,6 +82,13 @@ class BaseComponent(BaseModel):
     type: Literal["base"] = Field(default="base")
     style: Style = Field(default_factory=Style)
     model_config = ConfigDict(arbitrary_types_allowed=True, frozen=True)
+    name: str = Field(default="")
+
+    @model_validator(mode="before")
+    @classmethod
+    def auto_set_name(cls, d: dict[str, Any]) -> dict[str, Any]:
+        d["name"] = d.get("name", cls.__name__.lower())
+        return d
 
 
 class Text(BaseComponent):
@@ -213,8 +221,8 @@ class Table(BaseComponent):
 
 class Group(BaseComponent):
     type: Literal["group"] = Field(default="group")
-    name: str = Field(default="")
     components: Sequence["Component"] = Field(default_factory=list)
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
 

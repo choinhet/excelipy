@@ -442,6 +442,7 @@ def auto_size_1(out_path: Path):
         )
     )
 
+
 @example
 def auto_size_2(out_path: Path):
     long_text = "This is an avocado toast, Yay, Very happy with the avocado toast"

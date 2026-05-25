@@ -1,4 +1,4 @@
-from collections.abc import Collection, Sequence
+from collections.abc import Collection
 from functools import lru_cache
 
 from xlsxwriter.workbook import Format, Workbook
