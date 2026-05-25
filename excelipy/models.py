@@ -173,7 +173,7 @@ StyleFunc = Callable[[Any], Style]
 class Table(BaseComponent):
     type: Literal["table"] = Field(default="table")
     data: Annotated[pd.DataFrame, DataFrameAsJsonLines]
-    auto_width: bool = Field(default=True)
+    auto_size: bool = Field(default=True)
     auto_width_padding: int | None = Field(default=None)
     auto_width_tuning: int | None = Field(default=None)
     body_style: Style = Field(default_factory=Style)

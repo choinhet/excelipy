@@ -45,7 +45,7 @@ def _static_col_style(component: Table, col_name: str, col_idx: int) -> Style:
     return Style() if callable(maybe) or maybe is None else maybe
 
 
-@lru_cache(maxsize=32)
+@lru_cache
 def _load_font(
     font_family: str,
     font_size: int,
@@ -63,39 +63,37 @@ def _px_to_excel(px: float) -> int:
     return int(px // TUNING_DEFAULT + PADDING_DEFAULT)
 
 
+@lru_cache
+def get_char_size(
+    char: str,
+    font_size: int,
+    font_family: str,
+) -> int | float:
+    return _load_font(font_family, font_size).getlength(char)
+
+
 def get_text_size(
     text: str,
     font_size: int | None = None,
     font_family: str | None = None,
 ) -> int:
-    text = str(text)
     cur_font_size = font_size or DEFAULT_FONT_SIZE
-    cur_font_family = font_family or "Calibri"
-    cur_font = _load_font(cur_font_family, cur_font_size)
-    size_px = cur_font.getlength(text)
-    return _px_to_excel(size_px)
+    cur_font_family = font_family or DEFAULT_FONT_FAMILY
+    total_size = 0
+    for char in str(text):
+        total_size += get_char_size(char, cur_font_size, cur_font_family)
+    return _px_to_excel(total_size)
 
 
-def trunc(num: float, precision: int = 1) -> float:
-    x = 10**precision
-    return int(num * x) / x
-
-
-def _count_lines(text: str, text_px: float, col_px: float) -> int:
-    """How many lines does text_px need when the column is col_px wide."""
-    ratio = trunc(text_px / max(col_px, 1), 1)
-    result = math.ceil(ratio)
-    return result
-
-
-def _row_height_for_lines(lines: int, font_size: int | None) -> float:
-    fs = font_size or DEFAULT_FONT_SIZE
-    return max(DEFAULT_ROW_HEIGHT, fs * 1.3 * lines)
+def get_row_height(lines: int, font_size: int | None) -> float:
+    return max(DEFAULT_ROW_HEIGHT, (font_size or DEFAULT_FONT_SIZE) * 1.4 * lines)
 
 
 def _maybe_format(text: float | int | str, num_format: str | None) -> str:
     """
     Examples:
+        >>> _maybe_format(1.2321, None)
+        '1.2321'
         >>> _maybe_format(1.2321, ",.2f")
         '1.23'
         >>> _maybe_format(1.2321, ",d")
@@ -128,12 +126,13 @@ def write_table(
     """
     Examples:
         >>> n = 30_000
-        >>> data = pd.DataFrame({"A": [1, 2, 3] * n, "B": [4, 5, 6] * n, "C": [4, 5, 6] * n})
+        >>> data = pd.DataFrame({"A": [1, 2, 3] * n, "B": [4, "ha"*50, 6] * n, "C": [4, 5, 6] * n})
         >>> long_text = "This is an avocado toast" * 3
         >>> data.rename(columns={"A": long_text, "B": long_text}, inplace=True)
+        >>> origin = (0, 0)
         >>> default_style = Style(align="center", valign="vcenter")
         >>> row_style = {1: Style(font_size=14)}
-        >>> component = Table(data=data, row_style=row_style, min_col_size=10, max_col_size=20)
+        >>> component = Table(data=data, row_style=row_style, min_col_size=10, max_col_size=20, wrap_header=True)
         >>> import xlsxwriter
         >>> workbook = xlsxwriter.Workbook("output.xlsx")
         >>> worksheet = workbook.add_worksheet()
@@ -146,14 +145,19 @@ def write_table(
     df_columns = list(component.data.columns)
     df_rows = component.data.values.tolist()
 
-    # =============================== Write headers ================================
-    class SheetCache(TypedDict):
-        content: str
-        style: Style
-        format: Format
+    header_size_cache: dict[int, tuple[int, int | None]] = {}
+    body_size_cache: dict[int, dict[int, tuple[int, int | None]]] = defaultdict(dict)
+    biggest_body: dict[int, int] = defaultdict(lambda: 0)
 
-    header_cache: dict[int, SheetCache] = {}
-    body_cache: dict[int, dict[int, SheetCache]] = defaultdict(dict)
+    column_ranges = (
+        [(idx, idx) for idx in range(len(df_columns))]
+        if not component.merge_equal_headers
+        else []
+    )
+    # =============================== Write headers ================================
+    prev = None
+    prev_format = None
+    min_idx = 0
     for col_idx, cur_col in enumerate(df_columns):
         header_style = merge_styles(
             DEFAULT_HEADER_STYLE if component.default_style else None,
@@ -163,34 +167,31 @@ def write_table(
             Style(text_wrap=True) if component.wrap_header else None,
         )
         header_format = process_style(workbook, [header_style])
-        header_cache[col_idx] = {
-            "format": header_format,
-            "style": header_style,
-            "content": str(cur_col),
-        }
         worksheet.write(origin[1], origin[0] + col_idx, cur_col, header_format)
-
-    # =============================== Merge Headers ================================
-    column_ranges = [(idx, idx) for idx in range(len(df_columns))]
-    if component.merge_equal_headers:
-        column_ranges = []
-        prev = None
-        min_idx = 0
-        for idx, col in enumerate(df_columns):
-            if prev is not None and prev != col and idx - min_idx > 1:
+        if component.merge_equal_headers:
+            if prev is not None and prev != cur_col and col_idx - min_idx > 1:
                 worksheet.merge_range(
                     first_row=origin[1],
                     first_col=origin[0] + min_idx,
                     last_row=origin[1],
-                    last_col=origin[0] + idx - 1,
+                    last_col=origin[0] + col_idx - 1,
                     data=prev,
-                    cell_format=header_cache[min_idx]["format"],
+                    cell_format=prev_format,
                 )
-            if prev is not None and prev != col:
-                column_ranges.append((min_idx, idx - 1))
-                min_idx = idx
-            prev = col
-        column_ranges.append((min_idx, min_idx))
+            if prev is not None and prev != cur_col:
+                column_ranges.append((min_idx, col_idx - 1))
+                min_idx = col_idx
+            prev = cur_col
+            prev_format = header_format
+        if component.auto_size:
+            header_size_cache[col_idx] = (
+                get_text_size(
+                    cur_col,
+                    header_style.font_size,
+                    header_style.font_family,
+                ),
+                header_style.font_size,
+            )
 
     # =============================== Header filters ===============================
     if component.header_filters and not component.merge_equal_headers:
@@ -247,11 +248,19 @@ def write_table(
             if (row_style := component.row_style.get(row_idx)) is not None:
                 merged_style = merged_style.merge(row_style)
             current_format = process_style(workbook, [merged_style])
-            body_cache[col_idx][row_idx] = {
-                "format": current_format,
-                "style": merged_style,
-                "content": str(cell),
-            }
+
+            if component.auto_size:
+                cur_txt_size = get_text_size(
+                    str(cell),
+                    merged_style.font_size,
+                    merged_style.font_family,
+                )
+                body_size_cache[col_idx][row_idx] = (
+                    cur_txt_size,
+                    merged_style.font_size,
+                )
+                biggest_body[col_idx] = max(cur_txt_size, biggest_body[col_idx])
+
             if url is None:
                 worksheet.write(
                     origin[1] + row_idx + 1,
@@ -269,60 +278,74 @@ def write_table(
                 )
 
     # =============================== Auto Set Width ===============================
-    if component.auto_width:
-        # ================================ Body Maximum ================================
-        biggest_body: dict[int, tuple] = defaultdict(lambda: (0, "", 0))
-        for col_idx, rows in body_cache.items():
-            for _, row in rows.items():
-                cell = row["content"]
-                font_size = row["style"].font_size or DEFAULT_FONT_SIZE
-                font_family = row["style"].font_family or DEFAULT_FONT_FAMILY
-                num_format = row["style"].numeric_format
-                formatted_content = _maybe_format(cell, num_format)
-                # the product is an approx. so we don't need to calculate for the whole dataframe
-                cur_size = len(formatted_content) * font_size
-                if cur_size > biggest_body[col_idx][0]:
-                    biggest_body[col_idx] = (
-                        cur_size,
-                        formatted_content,
-                        font_size,
-                        font_family,
-                    )
+    if component.auto_size:
         cache_name = "_excelipy_col_sizes"
         col_sizes = getattr(worksheet, cache_name, None) or defaultdict(lambda: 0)
-        for col_idx, (_, content, font_size, font_family) in biggest_body.items():
-            txt_size = get_text_size(content, font_size, font_family)
+        # Compare cache to body
+        for col_idx, text_size in biggest_body.items():
             col_sizes[origin[0] + col_idx] = max(
-                txt_size, col_sizes[origin[0] + col_idx]
+                text_size,
+                col_sizes[origin[0] + col_idx],
             )
-
-        # =============================== Header Maximum ===============================
+        # Compare cache to header (considering merged spans)
         for beg, end in column_ranges:
-            cache = header_cache[beg]
-            style = cache["style"]
-            font_size = style.font_size or DEFAULT_FONT_SIZE
-            font_family = style.font_family or DEFAULT_FONT_FAMILY
-            content = cache["content"]
-            txt_size = get_text_size(content, font_size, font_family)
+            text_size = header_size_cache[beg][0]
             cur_body_sizes = [
                 col_sizes[origin[0] + col_idx] for col_idx in range(beg, end + 1)
             ]
             num_cols = end - beg + 1
             total_size = sum(cur_body_sizes)
-            diff = txt_size - total_size
+            diff = text_size - total_size
             if diff > 0:
                 to_increase = diff // num_cols
                 for col_idx in range(beg, end + 1):
                     col_sizes[origin[0] + col_idx] += to_increase
-
-        # ================================ Actual Sizes ================================
-        for sheet_idx, txt_size in col_sizes.items():
-            if component.min_col_size and txt_size < component.min_col_size:
-                txt_size = component.min_col_size
-            if component.max_col_size and txt_size > component.max_col_size:
-                txt_size = component.max_col_size
-            col_sizes[sheet_idx] = txt_size
+        # Hard set sizes
+        for col, width in component.column_width.items():
+            idxs = [i for i, c in enumerate(df_columns) if col == c]
+            for idx in idxs:
+                col_sizes[origin[0] + idx] = width
+        # apply constraints
+        for sheet_idx, text_size in col_sizes.items():
+            if component.min_col_size and text_size < component.min_col_size:
+                text_size = component.min_col_size
+            if component.max_col_size and text_size > component.max_col_size:
+                text_size = component.max_col_size
+            col_sizes[sheet_idx] = text_size
             worksheet.set_column(sheet_idx, sheet_idx, col_sizes[sheet_idx])
         setattr(worksheet, cache_name, col_sizes)
+        if component.wrap_header:
+            # row wrap headers
+            for beg, end in column_ranges:
+                text_size, text_font = header_size_cache[beg]
+                cur_body_sizes = [
+                    col_sizes[origin[0] + col_idx] for col_idx in range(beg, end + 1)
+                ]
+                num_cols = end - beg + 1
+                line_size = sum(cur_body_sizes)
+                diff = text_size - line_size
+                if diff > 0:
+                    lines_needed = math.ceil(text_size / line_size)
+                    row_height = get_row_height(lines_needed, text_font)
+                    worksheet.set_row(origin[1], row_height)
+            # row wrap body
+            for row_idx in range(len(df_rows)):
+                biggest_diff = 0
+                row_size = 0
+                row_font = None
+                biggest_col_size = 0
+                for col, rows in body_size_cache.items():
+                    col_size = col_sizes[origin[0] + col]
+                    cur_row, cur_font = rows[row_idx]
+                    diff = cur_row - col_size
+                    if diff > biggest_diff:
+                        biggest_diff = diff
+                        row_size = cur_row
+                        biggest_col_size = col_size
+                        row_font = cur_font
+                if biggest_diff > 0:
+                    lines_needed = math.ceil(row_size / biggest_col_size)
+                    row_height = get_row_height(lines_needed, row_font)
+                    worksheet.set_row(origin[1] + row_idx + 1, row_height)
 
     return x_size, y_size
