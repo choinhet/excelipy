@@ -148,11 +148,8 @@ def write_table(
     body_size_cache: dict[int, dict[int, tuple[int, int | None]]] = defaultdict(dict)
     biggest_body: dict[int, int] = defaultdict(lambda: 0)
 
-    column_ranges = (
-        [(idx, idx) for idx in range(len(df_columns))]
-        if not component.merge_equal_headers
-        else []
-    )
+    base_column_range = [(idx, idx) for idx in range(len(df_columns))]
+    column_ranges = list(base_column_range)
     # =============================== Write headers ================================
     prev = None
     prev_format = None
@@ -178,7 +175,10 @@ def write_table(
                     cell_format=prev_format,
                 )
             if prev is not None and prev != cur_col:
+                for _idx in range(min_idx, col_idx):
+                    column_ranges.remove((_idx, _idx))
                 column_ranges.append((min_idx, col_idx - 1))
+                column_ranges.sort(key=lambda x: x[0])
                 min_idx = col_idx
             prev = cur_col
             prev_format = header_format
@@ -193,7 +193,8 @@ def write_table(
             )
 
     # =============================== Header filters ===============================
-    if component.header_filters and not component.merge_equal_headers:
+    actually_merged = set(base_column_range) != set(column_ranges)
+    if component.header_filters and not actually_merged:
         worksheet.autofilter(
             origin[1],
             origin[0],
@@ -213,8 +214,8 @@ def write_table(
         )
         _maybe = Style | StyleFunc | None
         maybe_func_col_style: _maybe = component.column_style.get(col)
-        maybe_func_idx_col_style: _maybe = component.idx_column_style.get(col)
-        maybe_func_style = maybe_func_col_style or maybe_func_idx_col_style
+        maybe_func_idx_col_style: _maybe = component.idx_column_style.get(col_idx)
+        maybe_func_style = maybe_func_idx_col_style or maybe_func_col_style
         style_func: StyleFunc | None = None
         if callable(maybe_func_style):
             style_func: StyleFunc = cast(StyleFunc, maybe_func_style)
