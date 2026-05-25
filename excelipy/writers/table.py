@@ -29,7 +29,9 @@ COL_CACHE_NAME = "_excelipy_col_sizes"
 
 def row_wise(func):
     """
-    Marks a StyleFunc to receive all columns instead of only the current column values
+    Marks a StyleFunc (Callable[[...], ep.Style]) to receive all columns instead of only the current row value
+
+    Callable[[Any (data type)], ep.Style] -> Callable[[pd.Series], ep.Style]
     """
 
     @wraps(func)
