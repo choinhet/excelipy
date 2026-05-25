@@ -23,7 +23,7 @@ DEFAULT_FONT_FAMILY = "Calibri"
 TUNING_DEFAULT = 5
 PADDING_DEFAULT = 2
 
-ROW_WISE_ARG = "_ep_row_wise"
+ROW_WISE_ARG = "_excelipy_row_wise"
 COL_CACHE_NAME = "_excelipy_col_sizes"
 
 
