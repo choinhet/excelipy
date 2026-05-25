@@ -2,12 +2,11 @@ import logging
 import math
 from collections import defaultdict
 from functools import lru_cache, wraps
-from typing import TypedDict, cast
+from typing import cast
 
 import numpy as np
 import pandas as pd
 from PIL import ImageFont
-from xlsxwriter.format import Format
 from xlsxwriter.workbook import Workbook, Worksheet
 
 from excelipy.models import Link, Style, StyleFunc, Table
@@ -126,7 +125,7 @@ def write_table(
     """
     Examples:
         >>> n = 30_000
-        >>> data = pd.DataFrame({"A": [1, 2, 3] * n, "B": [4, "ha"*50, 6] * n, "C": [4, 5, 6] * n})
+        >>> data = pd.DataFrame({"A": [1, 2, 3] * n, "B": [4, "ha" * 50, 6] * n, "C": [4, 5, 6] * n})
         >>> long_text = "This is an avocado toast" * 3
         >>> data.rename(columns={"A": long_text, "B": long_text}, inplace=True)
         >>> origin = (0, 0)
@@ -321,7 +320,6 @@ def write_table(
                 cur_body_sizes = [
                     col_sizes[origin[0] + col_idx] for col_idx in range(beg, end + 1)
                 ]
-                num_cols = end - beg + 1
                 line_size = sum(cur_body_sizes)
                 diff = text_size - line_size
                 if diff > 0:
