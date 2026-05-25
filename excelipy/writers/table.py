@@ -16,12 +16,15 @@ from excelipy.styles.table import DEFAULT_BODY_STYLE, DEFAULT_HEADER_STYLE
 log = logging.getLogger("excelipy")
 
 DEFAULT_FONT_SIZE = 11
+DEFAULT_LINE_SPACING = 1.4
+DEFAULT_ROW_HEIGHT = 15.0
 DEFAULT_FONT_FAMILY = "Calibri"
 
-DEFAULT_ROW_HEIGHT = 15.0
 TUNING_DEFAULT = 5
 PADDING_DEFAULT = 2
+
 ROW_WISE_ARG = "_ep_row_wise"
+COL_CACHE_NAME = "_excelipy_col_sizes"
 
 
 def row_wise(func):
@@ -85,7 +88,10 @@ def get_text_size(
 
 
 def get_row_height(lines: int, font_size: int | None) -> float:
-    return max(DEFAULT_ROW_HEIGHT, (font_size or DEFAULT_FONT_SIZE) * 1.4 * lines)
+    return max(
+        DEFAULT_ROW_HEIGHT,
+        (font_size or DEFAULT_FONT_SIZE) * DEFAULT_LINE_SPACING * lines,
+    )
 
 
 def _maybe_format(text: float | int | str, num_format: str | None) -> str:
@@ -279,8 +285,7 @@ def write_table(
 
     # =============================== Auto Set Width ===============================
     if component.auto_size:
-        cache_name = "_excelipy_col_sizes"
-        col_sizes = getattr(worksheet, cache_name, None) or defaultdict(lambda: 0)
+        col_sizes = getattr(worksheet, COL_CACHE_NAME, None) or defaultdict(lambda: 0)
         # Compare cache to body
         for col_idx, text_size in biggest_body.items():
             col_sizes[origin[0] + col_idx] = max(
@@ -313,7 +318,7 @@ def write_table(
                 text_size = component.max_col_size
             col_sizes[sheet_idx] = text_size
             worksheet.set_column(sheet_idx, sheet_idx, col_sizes[sheet_idx])
-        setattr(worksheet, cache_name, col_sizes)
+        setattr(worksheet, COL_CACHE_NAME, col_sizes)
         if component.wrap_header:
             # row wrap headers
             for beg, end in column_ranges:
