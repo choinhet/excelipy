@@ -1,7 +1,7 @@
 import logging
 import math
 from collections import defaultdict
-from functools import lru_cache, wraps
+from functools import lru_cache
 from typing import cast
 
 import numpy as np
@@ -33,13 +33,8 @@ def row_wise(func):
 
     Callable[[Any (data type)], ep.Style] -> Callable[[pd.Series], ep.Style]
     """
-
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        return func(*args, **kwargs)
-
-    setattr(wrapper, ROW_WISE_ARG, True)
-    return wrapper
+    setattr(func, ROW_WISE_ARG, True)
+    return func
 
 
 def _static_col_style(component: Table, col_name: str, col_idx: int) -> Style:
