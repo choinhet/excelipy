@@ -326,7 +326,7 @@ def write_table(
                 line_size = sum(cur_body_sizes)
                 diff = text_size - line_size
                 if diff > 0:
-                    lines_needed = math.ceil(text_size / line_size)
+                    lines_needed = math.ceil(round(text_size / line_size, 1))
                     row_height = get_row_height(lines_needed, text_font)
                     worksheet.set_row(origin[1], row_height)
             # row wrap body
@@ -345,7 +345,7 @@ def write_table(
                         biggest_col_size = col_size
                         row_font = cur_font
                 if biggest_diff > 0:
-                    lines_needed = math.ceil(row_size / biggest_col_size)
+                    lines_needed = math.ceil(round(row_size / biggest_col_size, 1))
                     row_height = get_row_height(lines_needed, row_font)
                     worksheet.set_row(origin[1] + row_idx + 1, row_height)
 
