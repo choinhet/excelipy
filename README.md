@@ -18,9 +18,53 @@ uv add excelipy
 
 ## Appeal
 
+### Declarative Syntax
+
 This was created with less than 100 lines of code, in a declarative, clean, and easy to understand style:
 
 ![demo_example.png](static/demo_example.png)
+
+### An auto-size that works
+
+Default Parameters
+
+![auto_size_1.png](tests/resources/output/image_output/auto_size_1.png)
+
+Minimum Column Width
+
+![auto_size_2.png](tests/resources/output/image_output/auto_size_2.png)
+
+Maximum Column Width
+
+![auto_size_0.png](tests/resources/output/image_output/auto_size_0.png)
+
+```python
+import pandas as pd
+import excelipy as ep
+
+long_text = "This is an avocado toast, Yay, Very happy with the avocado toast"
+data = pd.DataFrame({"A": [1, 2, 3], "B": [4, "ha" * 50, 6], "C": [4, 5, 6]})
+data.rename(columns={"A": long_text, "B": long_text}, inplace=True)
+component = ep.Table(
+    data=data,
+    row_style={1: ep.Style(font_size=14)},
+    min_col_size=10,
+    max_col_size=20,
+    wrap_header=True,
+)
+ep.save(
+    excel=ep.Excel(
+        path=out_path,
+        sheets=[
+            ep.Sheet(
+                name="Sheet1",
+                components=[component],
+                style=ep.Style(align="center", valign="vcenter"),
+            )
+        ],
+    )
+)
+```
 
 ## Usage
 

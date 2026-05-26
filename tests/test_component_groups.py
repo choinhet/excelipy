@@ -1,3 +1,4 @@
+import pandas as pd
 import pytest
 
 import excelipy as ep
@@ -17,13 +18,18 @@ def test_group_unnesting():
     ]
     out = unnest_components(comps)
     size = len(out)
+
     for c in out:
         assert not isinstance(c, ep.Group)
-    assert size == 5
 
-    # all components have names
     for c in out:
         assert isinstance(c.name, str)
+
+    assert ep.Group().name == "group"
+    assert ep.Table(data=pd.DataFrame()).name == "table"
+    assert ep.Group(name="group_name").name == "group_name"
+
+    assert size == 5
 
 
 if __name__ == "__main__":

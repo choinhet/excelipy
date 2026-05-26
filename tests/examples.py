@@ -26,7 +26,7 @@ def query(sql: str) -> pd.DataFrame:
     return con.query(sql).df()
 
 
-def choose_font_color(background_color: str, threshold: int = 0.5) -> str:
+def choose_font_color(background_color: str, threshold: float = 0.5) -> str:
     def get_luminance(rgb_color):
         r, g, b = rgb_color
         luminance = 0.299 * r + 0.587 * g + 0.114 * b
@@ -393,6 +393,82 @@ def formatting_dates(out_path: Path):
     )
 
 
+@example
+def auto_size_0(out_path: Path):
+    long_text = "This is an avocado toast, Yay, Very happy with the avocado toast"
+    data = pd.DataFrame({"A": [1, 2, 3], "B": [4, "ha" * 50, 6], "C": [4, 5, 6]})
+    data.rename(columns={"A": long_text, "B": long_text}, inplace=True)
+    component = ep.Table(
+        data=data,
+        row_style={1: ep.Style(font_size=14)},
+        min_col_size=10,
+        max_col_size=20,
+        wrap_header=True,
+    )
+    ep.save(
+        excel=ep.Excel(
+            path=out_path,
+            sheets=[
+                ep.Sheet(
+                    name="Sheet1",
+                    components=[component],
+                    style=ep.Style(align="center", valign="vcenter"),
+                )
+            ],
+        )
+    )
+
+
+@example
+def auto_size_1(out_path: Path):
+    long_text = "This is an avocado toast, Yay, Very happy with the avocado toast"
+    data = pd.DataFrame({"A": [1, 2, 3], "B": [4, "ha" * 50, 6], "C": [4, 5, 6]})
+    data.rename(columns={"A": long_text, "B": long_text}, inplace=True)
+    component = ep.Table(
+        data=data,
+        row_style={1: ep.Style(font_size=14)},
+        wrap_header=True,
+    )
+    ep.save(
+        excel=ep.Excel(
+            path=out_path,
+            sheets=[
+                ep.Sheet(
+                    name="Sheet1",
+                    components=[component],
+                    style=ep.Style(align="center", valign="vcenter"),
+                )
+            ],
+        )
+    )
+
+
+@example
+def auto_size_2(out_path: Path):
+    long_text = "This is an avocado toast, Yay, Very happy with the avocado toast"
+    data = pd.DataFrame({"A": [1, 2, 3], "B": [4, "ha" * 50, 6], "C": [4, 5, 6]})
+    data.rename(columns={"A": long_text, "B": long_text}, inplace=True)
+    component = ep.Table(
+        data=data,
+        row_style={1: ep.Style(font_size=14)},
+        min_col_size=10,
+        wrap_header=True,
+    )
+    ep.save(
+        excel=ep.Excel(
+            path=out_path,
+            sheets=[
+                ep.Sheet(
+                    name="Sheet1",
+                    components=[component],
+                    style=ep.Style(align="center", valign="vcenter"),
+                )
+            ],
+        )
+    )
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
+    # auto_size_0("output.xlsx")
     run_all()

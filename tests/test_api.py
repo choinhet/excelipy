@@ -281,7 +281,6 @@ def test_big_columns():
                                 )
                             },
                             min_col_size=7,
-                            header_filters=False,
                             max_col_size=80,
                             wrap_header=True,
                         )

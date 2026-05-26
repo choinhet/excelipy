@@ -1,435 +1,121 @@
 import logging
 import math
 from collections import defaultdict
-from functools import lru_cache, reduce, wraps
-from typing import Any
+from functools import lru_cache
+from typing import cast
 
 import numpy as np
 import pandas as pd
 from PIL import ImageFont
 from xlsxwriter.workbook import Workbook, Worksheet
 
-from excelipy.const import python_to_excel_fmt
-from excelipy.models import Link, Style, Table
-from excelipy.style import process_style
+from excelipy.models import Link, Style, StyleFunc, Table
+from excelipy.style import merge_styles, process_style
 from excelipy.styles.table import DEFAULT_BODY_STYLE, DEFAULT_HEADER_STYLE
 
 log = logging.getLogger("excelipy")
 
 DEFAULT_FONT_SIZE = 11
+DEFAULT_LINE_SPACING = 1.4
 DEFAULT_ROW_HEIGHT = 15.0
+DEFAULT_FONT_FAMILY = "Calibri"
+
 TUNING_DEFAULT = 5
 PADDING_DEFAULT = 2
-ROW_WISE_ARG = "_ep_row_wise"
+
+ROW_WISE_ARG = "_excelipy_row_wise"
+COL_CACHE_NAME = "_excelipy_col_sizes"
 
 
 def row_wise(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        return func(*args, **kwargs)
+    """
+    Marks a StyleFunc (Callable[[...], ep.Style]) to receive all columns instead of only the current row value
 
-    setattr(wrapper, ROW_WISE_ARG, True)
-    return wrapper
-
-
-# ---------------------------------------------------------------------------
-# Style helpers
-# ---------------------------------------------------------------------------
+    Callable[[Any (data type)], ep.Style] -> Callable[[pd.Series], ep.Style]
+    """
+    setattr(func, ROW_WISE_ARG, True)
+    return func
 
 
 def _static_col_style(component: Table, col_name: str, col_idx: int) -> Style:
-    maybe = component.idx_column_style.get(col_idx) or component.column_style.get(
-        col_name
-    )
+    idx_style = component.idx_column_style.get(col_idx)
+    col_style = component.column_style.get(col_name)
+    maybe = idx_style or col_style
     return Style() if callable(maybe) or maybe is None else maybe
 
 
-def _col_style_chain(
-    component: Table,
-    col_name: str,
-    col_idx: int,
-    default_style: Style,
-) -> tuple[Style, ...]:
-    return (
-        default_style,
-        component.style,
-        component.body_style,
-        _static_col_style(component, col_name, col_idx),
-    )
-
-
-def _apply_numeric_format(value: Any, numeric_format: str | None) -> str:
-    """
-    Format a cell value using its numeric format string for display-width measurement.
-    Falls back to str() if the value is not numeric or a format is not applicable.
-    """
-    if numeric_format is None or numeric_format == "General":
-        return str(value)
-    excel_fmt = python_to_excel_fmt(numeric_format)
-    if pd.isna(value) or value in (np.inf, -np.inf):
-        return str(value)
-    # Percentage: Excel stores 0.5 and displays 50% — multiply by 100
-    if "%" in excel_fmt:
-        decimals = len(excel_fmt.split(".")[1].rstrip("%")) if "." in excel_fmt else 0
-        return f"{float(value) * 100:.{decimals}f}%"
-    # Decimal / float format
-    if "." in excel_fmt:
-        decimals = len(excel_fmt.split(".")[1].rstrip("0").rstrip("#"))
-        if "," in excel_fmt:
-            return f"{float(value):,.{decimals}f}"
-        return f"{float(value):.{decimals}f}"
-    # Integer with thousands separator
-    if "," in excel_fmt:
-        return f"{float(value):,.0f}"
-    return str(value)
-
-
-def get_style_font_family(*styles: Style | None) -> str | None:
-    cur_font = None
-    for s in filter(None, styles):
-        cur_font = s.font_family or cur_font
-    return cur_font
-
-
-def get_style_font_size(*styles: Style | None) -> int | None:
-    cur_font = None
-    for s in filter(None, styles):
-        cur_font = s.font_size or cur_font
-    return cur_font
-
-
-# ---------------------------------------------------------------------------
-# Text measurement
-# ---------------------------------------------------------------------------
-
-
-@lru_cache(maxsize=32)
+@lru_cache
 def _load_font(
-    font_family: str, font_size: int
+    font_family: str,
+    font_size: int,
 ) -> ImageFont.ImageFont | ImageFont.FreeTypeFont:
     try:
         return ImageFont.truetype(f"{font_family.lower()}.ttf", font_size)
     except Exception as e:
         log.debug(
-            f"Could not load custom font {font_family}, using default. Exception: {e}"
+            f"Could not load custom font {font_family}, using default.\nException: {e}"
         )
         return ImageFont.load_default()
+
+
+def _px_to_excel(px: float) -> int:
+    return int(px // TUNING_DEFAULT + PADDING_DEFAULT)
+
+
+@lru_cache
+def get_char_size(
+    char: str,
+    font_size: int,
+    font_family: str,
+) -> int | float:
+    return _load_font(font_family, font_size).getlength(char)
 
 
 def get_text_size(
     text: str,
     font_size: int | None = None,
     font_family: str | None = None,
-) -> float:
-    text = str(text)
+) -> int:
     cur_font_size = font_size or DEFAULT_FONT_SIZE
-    cur_font_family = font_family or "Calibri"
-    cur_font = _load_font(cur_font_family, cur_font_size)
-    return cur_font.getlength(text)
+    cur_font_family = font_family or DEFAULT_FONT_FAMILY
+    total_size = 0
+    for char in str(text):
+        total_size += get_char_size(char, cur_font_size, cur_font_family)
+    return _px_to_excel(total_size)
 
 
-def _px_to_excel(px: float, tuning: int, padding: int) -> float:
-    return px // tuning + padding
-
-
-def _excel_to_px(excel_units: float, tuning: int, padding: int) -> float:
-    return (excel_units - padding) * tuning
-
-
-def _header_font(
-    cur_col: str,
-    component: Table,
-    default_style: Style,
-) -> tuple[int | None, str | None]:
-    font_size = get_style_font_size(
-        DEFAULT_HEADER_STYLE,
-        default_style,
-        component.style,
-        component.header_style.get(cur_col),
+def get_row_height(lines: int, font_size: int | None) -> float:
+    return max(
+        DEFAULT_ROW_HEIGHT,
+        (font_size or DEFAULT_FONT_SIZE) * DEFAULT_LINE_SPACING * lines,
     )
-    font_family = get_style_font_family(
-        DEFAULT_HEADER_STYLE,
-        default_style,
-        component.style,
-        component.header_style.get(cur_col),
-    )
-    return font_size, font_family
 
 
-def _header_excel_width(
-    cur_col: str,
-    component: Table,
-    tuning: int,
-    padding: int,
-    default_style: Style,
-) -> float:
-    font_size, font_family = _header_font(cur_col, component, default_style)
-    return _px_to_excel(get_text_size(cur_col, font_size, font_family), tuning, padding)
-
-
-def trunc(num: float, precision: int = 1) -> float:
-    x = 10**precision
-    return int(num * x) / x
-
-
-def _count_lines(text: str, text_px: float, col_px: float) -> int:
-    """How many lines does text_px need when the column is col_px wide."""
-    ratio = trunc(text_px / max(col_px, 1), 1)
-    result = math.ceil(ratio)
-    return result
-
-
-def _row_height_for_lines(lines: int, font_size: int | None) -> float:
-    fs = font_size or DEFAULT_FONT_SIZE
-    return max(DEFAULT_ROW_HEIGHT, fs * 1.3 * lines)
-
-
-# ---------------------------------------------------------------------------
-# Column width cache
-# ---------------------------------------------------------------------------
-
-
-def _get_sheet_cache(workbook: Workbook, worksheet: Worksheet) -> dict[int, float]:
-    cache: dict[str, dict[int, float]] = getattr(
-        workbook, "_excelipy_col_size_cache", {}
-    )
-    return cache.setdefault(worksheet.name, {})
-
-
-def _set_col_width(
-    workbook: Workbook,
-    worksheet: Worksheet,
-    abs_col_idx: int,
-    width: float,
-    min_col_size: float | None,
-    max_col_size: float | None,
-) -> float:
+def _maybe_format(text: float | int | str, num_format: str | None) -> str:
     """
-    Clamp width to [min_col_size, max_col_size], then persist the maximum
-    value seen so far for this column and call set_column.
-    Always returns the value actually written.
+    Examples:
+        >>> _maybe_format(1.2321, None)
+        '1.2321'
+        >>> _maybe_format(1.2321, ",.2f")
+        '1.23'
+        >>> _maybe_format(1.2321, ",d")
+        '1'
+        >>> _maybe_format(20000, ",d")
+        '20,000'
+        >>> _maybe_format("text", ".2f")
+        'text'
     """
-    if min_col_size is not None:
-        width = max(width, min_col_size)
-    if max_col_size is not None:
-        width = min(width, max_col_size)
-
-    sheet_cache = _get_sheet_cache(workbook, worksheet)
-    final = max(sheet_cache.get(abs_col_idx, 0), width)
-    sheet_cache[abs_col_idx] = final
-
-    cache = getattr(workbook, "_excelipy_col_size_cache", {})
-    cache[worksheet.name] = sheet_cache
-    setattr(workbook, "_excelipy_col_size_cache", cache)
-
-    worksheet.set_column(abs_col_idx, abs_col_idx, int(final))
-    return final
-
-
-# ---------------------------------------------------------------------------
-# Auto-width calculation
-# ---------------------------------------------------------------------------
-
-
-def get_auto_width(
-    cur_col: str,
-    col_idx: int,
-    data: pd.Series,
-    component: Table,
-    default_style: Style,
-    is_merged_header: bool = False,
-) -> float:
-    tuning = component.auto_width_tuning or TUNING_DEFAULT
-    padding = component.auto_width_padding or PADDING_DEFAULT
-
-    chain = _col_style_chain(component, cur_col, col_idx, default_style)
-    col_font_size = get_style_font_size(*chain)
-    col_font_family = get_style_font_family(*chain)
-
-    # Resolve the column's numeric format from the style chain so cell values
-    # are measured as they will actually appear (e.g. 1.3 → "130.00%").
-    chain_styles = [
-        s
-        for s in _col_style_chain(component, cur_col, col_idx, default_style)
-        if s is not None
-    ]
-    numeric_fmt = None
-    for s in chain_styles:
-        numeric_fmt = s.numeric_format or numeric_fmt
-
-    data = data.reset_index(drop=True)
-    max_body_text = (
-        str(
-            data.iloc[
-                (
-                    data.apply(lambda v: _apply_numeric_format(v, numeric_fmt))
-                    .apply(len)
-                    .idxmax()
-                )
-            ]
-        )
-        if not data.empty
-        else ""
-    )
-    body_px = get_text_size(max_body_text, col_font_size, col_font_family)
-
-    if not is_merged_header:
-        font_size, font_family = _header_font(cur_col, component, default_style)
-        header_px = get_text_size(cur_col, font_size, font_family)
-        max_px = max(header_px, body_px)
-    else:
-        # Merged: body drives individual column width.
-        # _fix_merged_header_widths will grow the span to fit the header.
-        max_px = body_px
-
-    return _px_to_excel(max_px, tuning, padding)
-
-
-# ---------------------------------------------------------------------------
-# Merged header post-pass
-# ---------------------------------------------------------------------------
-
-
-def _fix_merged_header_widths(
-    workbook: Workbook,
-    worksheet: Worksheet,
-    component: Table,
-    idx_by_header: dict[str, list],
-    origin: tuple[int, int],
-    this_table_widths: dict[int, float],
-    default_style: Style,
-) -> None:
-    """
-    Ensure each merged span is wide enough to contain its header text.
-    Distributes any deficit proportionally across the span's columns.
-    Respects min/max_col_size.
-    """
-    tuning = component.auto_width_tuning or TUNING_DEFAULT
-    padding = component.auto_width_padding or PADDING_DEFAULT
-
-    for cur_col, indices in idx_by_header.items():
-        total_span = sum(this_table_widths.get(i, 0) for i in indices)
-        header_len = _header_excel_width(
-            cur_col, component, tuning, padding, default_style
-        )
-
-        # If a max is set, the header can wrap — span only needs to reach
-        # max_col_size * n_cols at most.
-        if component.max_col_size is not None:
-            header_len = min(header_len, component.max_col_size * len(indices))
-
-        if total_span >= header_len:
-            continue
-
-        deficit = header_len - total_span
-        per_col = deficit / len(indices)
-        for i in indices:
-            new_width = this_table_widths.get(i, 0) + per_col
-            this_table_widths[i] = new_width
-            _set_col_width(
-                workbook=workbook,
-                worksheet=worksheet,
-                abs_col_idx=origin[0] + i,
-                width=new_width,
-                min_col_size=component.min_col_size,
-                max_col_size=component.max_col_size,
-            )
-
-
-# ---------------------------------------------------------------------------
-# Row height calculation
-# ---------------------------------------------------------------------------
-
-
-def _calc_header_height(
-    component: Table,
-    idx_by_header: dict[str, list],
-    this_table_widths: dict[int, float],
-    default_style: Style,
-) -> float:
-    """
-    Estimate the header row height based on how many lines each header cell
-    needs given the final column widths. Covers both merged and non-merged headers.
-    """
-    tuning = component.auto_width_tuning or TUNING_DEFAULT
-    padding = component.auto_width_padding or PADDING_DEFAULT
-    max_lines = 1
-    max_font_size = DEFAULT_FONT_SIZE
-
-    def _clamp_width(w: float) -> float:
-        if component.min_col_size is not None:
-            w = max(w, component.min_col_size)
-        if component.max_col_size is not None:
-            w = min(w, component.max_col_size)
-        return w
-
-    # Merged headers: span width is the sum of all columns in the group,
-    # each clamped individually (matching what _set_col_width does per column).
-    merged_col_indices: set[int] = set()
-    for cur_col, indices in idx_by_header.items():
-        font_size, font_family = _header_font(cur_col, component, default_style)
-        max_font_size = max(max_font_size, font_size or DEFAULT_FONT_SIZE)
-        text_px = get_text_size(cur_col, font_size, font_family)
-        total_span = sum(_clamp_width(this_table_widths.get(i, 0)) for i in indices)
-        col_px = _excel_to_px(total_span, tuning, padding)
-        max_lines = max(max_lines, _count_lines(cur_col, text_px, col_px))
-        merged_col_indices.update(indices)
-
-    # Non-merged headers: each column stands alone.
-    for col_idx, cur_col in enumerate(component.data.columns):
-        if col_idx in merged_col_indices:
-            continue
-        font_size, font_family = _header_font(cur_col, component, default_style)
-        max_font_size = max(max_font_size, font_size or DEFAULT_FONT_SIZE)
-        text_px = get_text_size(cur_col, font_size, font_family)
-        col_width = _clamp_width(this_table_widths.get(col_idx, 10))
-        col_px = _excel_to_px(col_width, tuning, padding)
-        max_lines = max(max_lines, _count_lines(cur_col, text_px, col_px))
-
-    return _row_height_for_lines(max_lines, max_font_size)
-
-
-def _calc_body_row_height(
-    row: pd.Series,
-    col_widths: dict[int, float],
-    component: Table,
-    default_style: Style,
-) -> float:
-    """
-    Estimate the body row height based on the widest content in each cell.
-    """
-    tuning = component.auto_width_tuning or TUNING_DEFAULT
-    padding = component.auto_width_padding or PADDING_DEFAULT
-    max_lines = 1
-    # Font size of the column that produces the most lines — that column
-    # determines how tall each line is, so it drives the row height.
-    dominant_font_size = DEFAULT_FONT_SIZE
-
-    for col_idx, cell in enumerate(row):
-        col_width = col_widths.get(col_idx, 10)
-        chain = _col_style_chain(component, row.index[col_idx], col_idx, default_style)
-        font_size = get_style_font_size(*chain) or DEFAULT_FONT_SIZE
-        font_family = get_style_font_family(*chain) or "Arial"
-        numeric_fmt = None
-        for s in filter(None, chain):
-            numeric_fmt = s.numeric_format or numeric_fmt
-        formatted = _apply_numeric_format(cell, numeric_fmt)
-        text_px = get_text_size(formatted, font_size, font_family)
-        col_px = _excel_to_px(col_width, tuning, padding)
-        lines = _count_lines(formatted, text_px, col_px)
-        if lines > max_lines:
-            max_lines = lines
-            dominant_font_size = font_size
-        elif lines == max_lines and font_size > dominant_font_size:
-            # Same number of lines but larger font — needs more vertical space.
-            dominant_font_size = font_size
-
-    return _row_height_for_lines(max_lines, dominant_font_size)
-
-
-# ---------------------------------------------------------------------------
-# Main write function
-# ---------------------------------------------------------------------------
+    if num_format is None:
+        return str(text)
+    clz = int
+    if "." in str(text) or "f" in num_format:
+        clz = float
+    if "d" in num_format:
+        clz = int
+    try:
+        return format(clz(text), num_format)
+    except Exception:
+        return str(text)
 
 
 def write_table(
@@ -439,112 +125,79 @@ def write_table(
     default_style: Style,
     origin: tuple[int, int] = (0, 0),
 ) -> tuple[int, int]:
+    """
+    Examples:
+        >>> n = 30_000
+        >>> data = pd.DataFrame({"A": [1, 2, 3] * n, "B": [4, "ha" * 50, 6] * n, "C": [4, 5, 6] * n})
+        >>> long_text = "This is an avocado toast" * 3
+        >>> data.rename(columns={"A": long_text, "B": long_text}, inplace=True)
+        >>> origin = (0, 0)
+        >>> default_style = Style(align="center", valign="vcenter")
+        >>> row_style = {1: Style(font_size=14)}
+        >>> component = Table(data=data, row_style=row_style, min_col_size=10, max_col_size=20, wrap_header=True)
+        >>> import xlsxwriter
+        >>> workbook = xlsxwriter.Workbook("output.xlsx")
+        >>> worksheet = workbook.add_worksheet()
+        >>> _ = write_table(workbook, worksheet, component, default_style)
+        >>> workbook.close()
+    """
     x_size = component.data.shape[1]
-    y_size = component.data.shape[0] + 1  # +1 for the header row
+    y_size = component.data.shape[0] + 1
 
-    # Build merged-header index: consecutive columns sharing the same name.
-    idx_by_header: dict[str, list] = defaultdict(list)
-    if component.merge_equal_headers:
-        for idx, cur_col in enumerate(component.data.columns):
-            existing = idx_by_header[cur_col]
-            if not existing or idx == existing[-1] + 1:
-                existing.append(idx)
-        idx_by_header = {k: v for k, v in idx_by_header.items() if len(v) >= 2}
+    df_columns = list(component.data.columns)
+    df_rows = component.data.values.tolist()
 
-    merged_col_indices: set[int] = {
-        i for indices in idx_by_header.values() for i in indices
-    }
+    header_size_cache: dict[int, tuple[int, int | None]] = {}
+    body_size_cache: dict[int, dict[int, tuple[int, int | None]]] = defaultdict(dict)
+    biggest_body: dict[int, int] = defaultdict(lambda: 0)
 
-    wrap_style = Style(text_wrap=True) if component.wrap_header else None
-
-    # Per-table column widths (relative col_idx → excel units).
-    # this_table_widths: pre-clamp content-driven widths, used by the post-pass
-    #   so merged header deficit calculations are isolated from other tables.
-    # final_table_widths: post-clamp widths actually set on the sheet, used by
-    #   row height calculations so line-wrap estimates match what Excel renders.
-    this_table_widths: dict[int, float] = {}
-    final_table_widths: dict[int, float] = {}
-
-    # ------------------------------------------------------------------ headers
-    for col_idx, cur_col in enumerate(component.data.columns):
-        current_header_style = component.header_style.get(cur_col, component.style)
-        header_styles = [default_style, current_header_style]
-        if component.default_style:
-            header_styles = [DEFAULT_HEADER_STYLE] + header_styles
-        if wrap_style:
-            header_styles = header_styles + [wrap_style]
-
-        header_format = process_style(workbook, header_styles)
-        header_write_skip = idx_by_header.get(cur_col, [])
-        is_first = False
-        cur_skip = col_idx in header_write_skip and not (
-            is_first := col_idx == header_write_skip[0]
-        )
-
-        if is_first:
-            worksheet.merge_range(
-                origin[1],
-                origin[0],
-                origin[1],
-                origin[0] + len(header_write_skip) - 1,
-                cur_col,
-                header_format,
-            )
-        elif not cur_skip:
-            worksheet.write(origin[1], origin[0] + col_idx, cur_col, header_format)
-        else:
-            worksheet.write(origin[1], origin[0] + col_idx, "", header_format)
-
-        # Column width
-        set_width = component.idx_column_width.get(
-            col_idx
-        ) or component.column_width.get(cur_col)
-        if set_width:
-            estimated_width = float(set_width)
-        else:
-            estimated_width = get_auto_width(
-                cur_col,
-                col_idx,
-                component.data.iloc[:, col_idx],
-                component,
-                default_style,
-                is_merged_header=col_idx in merged_col_indices,
-            )
-
-        this_table_widths[col_idx] = estimated_width
-        final_width = _set_col_width(
-            workbook=workbook,
-            worksheet=worksheet,
-            abs_col_idx=origin[0] + col_idx,
-            width=estimated_width,
-            min_col_size=component.min_col_size,
-            max_col_size=component.max_col_size,
-        )
-        final_table_widths[col_idx] = final_width
-
-    # Post-pass: grow merged spans to fit their header text.
-    if component.merge_equal_headers and idx_by_header:
-        _fix_merged_header_widths(
-            workbook,
-            worksheet,
-            component,
-            idx_by_header,
-            origin,
-            this_table_widths,
+    base_column_range = [(idx, idx) for idx in range(len(df_columns))]
+    column_ranges = list(base_column_range)
+    # =============================== Write headers ================================
+    prev = None
+    prev_format = None
+    min_idx = 0
+    for col_idx, cur_col in enumerate(df_columns):
+        header_style = merge_styles(
+            DEFAULT_HEADER_STYLE if component.default_style else None,
             default_style,
+            component.style,
+            component.header_style.get(cur_col),
+            Style(text_wrap=True) if component.wrap_header else None,
         )
+        header_format = process_style(workbook, [header_style])
+        worksheet.write(origin[1], origin[0] + col_idx, cur_col, header_format)
+        if component.merge_equal_headers:
+            if prev is not None and prev != cur_col and col_idx - min_idx > 1:
+                worksheet.merge_range(
+                    first_row=origin[1],
+                    first_col=origin[0] + min_idx,
+                    last_row=origin[1],
+                    last_col=origin[0] + col_idx - 1,
+                    data=prev,
+                    cell_format=prev_format,
+                )
+            if prev is not None and prev != cur_col:
+                for _idx in range(min_idx, col_idx):
+                    column_ranges.remove((_idx, _idx))
+                column_ranges.append((min_idx, col_idx - 1))
+                column_ranges.sort(key=lambda x: x[0])
+                min_idx = col_idx
+            prev = cur_col
+            prev_format = header_format
+        if component.auto_size:
+            header_size_cache[col_idx] = (
+                get_text_size(
+                    cur_col,
+                    header_style.font_size,
+                    header_style.font_family,
+                ),
+                header_style.font_size,
+            )
 
-    # Header row height — must run after the post-pass since _fix_merged_header_widths
-    # updates this_table_widths in-place with the final expanded span widths.
-    if component.wrap_header:
-        header_height = _calc_header_height(
-            component, idx_by_header, this_table_widths, default_style
-        )
-        log.debug(f"Header height: {header_height} [Sheet: {worksheet.name}]")
-        if header_height > DEFAULT_ROW_HEIGHT:
-            worksheet.set_row(origin[1], header_height)
-
-    if component.header_filters:
+    # =============================== Header filters ===============================
+    actually_merged = set(base_column_range) != set(column_ranges)
+    if component.header_filters and not actually_merged:
         worksheet.autofilter(
             origin[1],
             origin[0],
@@ -552,64 +205,65 @@ def write_table(
             origin[0] + len(list(component.data.columns)) - 1,
         )
 
-    # -------------------------------------------------------------------- body
-    for col_idx, col in enumerate(component.data.columns):
-        col_style = _static_col_style(component, col, col_idx)
-        for row_idx, (_, row) in enumerate(component.data.iterrows()):
+    # ================================= Write body =================================
+    for col_idx, col in enumerate(df_columns):
+        base_style = merge_styles(
+            DEFAULT_BODY_STYLE if component.default_style else None,
+            default_style,
+            component.style,
+            component.body_style,
+            _static_col_style(component, col, col_idx),
+            Style(text_wrap=True) if component.wrap_header else None,
+        )
+        _maybe = Style | StyleFunc | None
+        maybe_func_col_style: _maybe = component.column_style.get(col)
+        maybe_func_idx_col_style: _maybe = component.idx_column_style.get(col_idx)
+        maybe_func_style = maybe_func_idx_col_style or maybe_func_col_style
+        style_func: StyleFunc | None = None
+        if callable(maybe_func_style):
+            style_func: StyleFunc = cast(StyleFunc, maybe_func_style)
+        for row_idx, row in enumerate(df_rows):
+            cell = row[col_idx]
             row_style = component.row_style.get(row_idx)
-            body_style = [
-                default_style,
-                component.style,
-                component.body_style,
-                col_style,
-                row_style,
-            ]
-            if component.default_style:
-                body_style = [DEFAULT_BODY_STYLE] + body_style
-            if wrap_style:
-                body_style = body_style + [wrap_style]
-
-            merged_style: Style = reduce(
-                lambda acc, s: acc.merge(s),
-                filter(None, body_style),
-                Style(),
+            merged_style = (
+                base_style.merge(row_style) if row_style is not None else base_style
             )
-
-            cell = row.iloc[col_idx]
             url = None
-
             if isinstance(cell, Link):
                 url = cell.url
                 cell = cell.text
-
             if merged_style.fill_na is not None and pd.isna(cell):
                 cell = merged_style.fill_na
                 merged_style = merged_style.model_copy(update=dict(numeric_format=None))
-
             if merged_style.fill_zero is not None and cell == 0:
                 cell = merged_style.fill_zero
                 merged_style = merged_style.model_copy(update=dict(numeric_format=None))
-
             if merged_style.fill_inf is not None and cell in (np.inf, -np.inf):
                 cell = merged_style.fill_inf
                 merged_style = merged_style.model_copy(update=dict(numeric_format=None))
-
-            maybe_callable = component.idx_column_style.get(
-                col_idx
-            ) or component.column_style.get(col)
-            if callable(maybe_callable):
+            if style_func:
                 dyn_style = (
-                    maybe_callable(row)
-                    if getattr(maybe_callable, ROW_WISE_ARG, False)
-                    else maybe_callable(cell)
+                    style_func(row)
+                    if getattr(style_func, ROW_WISE_ARG, False)
+                    else style_func(cell)
                 )
-                if dyn_style is not None:
-                    merged_style = merged_style.merge(dyn_style)
-
-            if row_style is not None:
+                merged_style = merged_style.merge(dyn_style)
+            if (row_style := component.row_style.get(row_idx)) is not None:
                 merged_style = merged_style.merge(row_style)
-
             current_format = process_style(workbook, [merged_style])
+
+            if component.auto_size:
+                cur_txt_size = get_text_size(
+                    str(cell),
+                    merged_style.font_size,
+                    merged_style.font_family,
+                )
+                body_size_cache[col_idx][row_idx] = (
+                    cur_txt_size,
+                    merged_style.font_size,
+                )
+                biggest_body[col_idx] = max(cur_txt_size, biggest_body[col_idx])
+
             if url is None:
                 worksheet.write(
                     origin[1] + row_idx + 1,
@@ -626,14 +280,73 @@ def write_table(
                     cell,
                 )
 
-    # Body row heights — computed per-row after all cells are written.
-    # Only runs when wrap_header=True since that's when cells can overflow vertically.
-    if component.wrap_header:
-        for row_idx, (_, row) in enumerate(component.data.iterrows()):
-            height = _calc_body_row_height(
-                row, final_table_widths, component, default_style
+    # =============================== Auto Set Width ===============================
+    if component.auto_size:
+        col_sizes = getattr(worksheet, COL_CACHE_NAME, None) or defaultdict(lambda: 0)
+        # Compare cache to body
+        for col_idx, text_size in biggest_body.items():
+            col_sizes[origin[0] + col_idx] = max(
+                text_size,
+                col_sizes[origin[0] + col_idx],
             )
-            if height > DEFAULT_ROW_HEIGHT:
-                worksheet.set_row(origin[1] + row_idx + 1, height)
+        # Compare cache to header (considering merged spans)
+        for beg, end in column_ranges:
+            text_size = header_size_cache[beg][0]
+            cur_body_sizes = [
+                col_sizes[origin[0] + col_idx] for col_idx in range(beg, end + 1)
+            ]
+            num_cols = end - beg + 1
+            total_size = sum(cur_body_sizes)
+            diff = text_size - total_size
+            if diff > 0:
+                to_increase = diff // num_cols
+                for col_idx in range(beg, end + 1):
+                    col_sizes[origin[0] + col_idx] += to_increase
+        # Hard set sizes
+        for col, width in component.column_width.items():
+            idxs = [i for i, c in enumerate(df_columns) if col == c]
+            for idx in idxs:
+                col_sizes[origin[0] + idx] = width
+        # apply constraints
+        for sheet_idx, text_size in col_sizes.items():
+            if component.min_col_size and text_size < component.min_col_size:
+                text_size = component.min_col_size
+            if component.max_col_size and text_size > component.max_col_size:
+                text_size = component.max_col_size
+            col_sizes[sheet_idx] = text_size
+            worksheet.set_column(sheet_idx, sheet_idx, col_sizes[sheet_idx])
+        setattr(worksheet, COL_CACHE_NAME, col_sizes)
+        if component.wrap_header:
+            # row wrap headers
+            for beg, end in column_ranges:
+                text_size, text_font = header_size_cache[beg]
+                cur_body_sizes = [
+                    col_sizes[origin[0] + col_idx] for col_idx in range(beg, end + 1)
+                ]
+                line_size = sum(cur_body_sizes)
+                diff = text_size - line_size
+                if diff > 0:
+                    lines_needed = math.ceil(text_size / line_size)
+                    row_height = get_row_height(lines_needed, text_font)
+                    worksheet.set_row(origin[1], row_height)
+            # row wrap body
+            for row_idx in range(len(df_rows)):
+                biggest_diff = 0
+                row_size = 0
+                row_font = None
+                biggest_col_size = 0
+                for col, rows in body_size_cache.items():
+                    col_size = col_sizes[origin[0] + col]
+                    cur_row, cur_font = rows[row_idx]
+                    diff = cur_row - col_size
+                    if diff > biggest_diff:
+                        biggest_diff = diff
+                        row_size = cur_row
+                        biggest_col_size = col_size
+                        row_font = cur_font
+                if biggest_diff > 0:
+                    lines_needed = math.ceil(row_size / biggest_col_size)
+                    row_height = get_row_height(lines_needed, row_font)
+                    worksheet.set_row(origin[1] + row_idx + 1, row_height)
 
     return x_size, y_size

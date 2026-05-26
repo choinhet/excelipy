@@ -10,6 +10,7 @@ from pydantic import (
     Field,
     GetCoreSchemaHandler,
     GetJsonSchemaHandler,
+    model_validator,
 )
 from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import core_schema
@@ -49,6 +50,15 @@ class Style(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
+    def __str__(self) -> str:
+        """
+        Returns:
+            Examples:
+            >>> str(Style(font_size=14))
+            "{'font_size': 14}"
+        """
+        return str(self.model_dump(exclude_defaults=True))
+
     def merge(self, other: Self) -> Self:
         self_dict = self.model_dump(exclude_none=True)
         other_dict = other.model_dump(exclude_none=True)
@@ -71,11 +81,14 @@ class Style(BaseModel):
 class BaseComponent(BaseModel):
     type: Literal["base"] = Field(default="base")
     style: Style = Field(default_factory=Style)
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    model_config = ConfigDict(arbitrary_types_allowed=True, frozen=True)
+    name: str = Field(default="")
 
-    @property
-    def name(self) -> str:
-        return self.type
+    @model_validator(mode="before")
+    @classmethod
+    def auto_set_name(cls, d: dict[str, Any]) -> dict[str, Any]:
+        d["name"] = d.get("name", cls.__name__.lower())
+        return d
 
 
 class Text(BaseComponent):
@@ -95,6 +108,11 @@ class Link(BaseComponent):
     merged: bool = Field(default=True)
 
     def __str__(self):
+        """
+        Examples:
+            >>> str(Link(text="example", url="https://example.com"))
+            'example'
+        """
         return self.text
 
 
@@ -157,29 +175,29 @@ class DataFrameAsJsonLines(pd.DataFrame):
         }
 
 
+StyleFunc = Callable[[Any], Style]
+
+
 class Table(BaseComponent):
     type: Literal["table"] = Field(default="table")
     data: Annotated[pd.DataFrame, DataFrameAsJsonLines]
-    header_style: dict[str, Style] = Field(default_factory=dict)
-    body_style: Style = Field(default_factory=Style)
-    column_style: dict[str, Style | Callable[[Any], Style]] = Field(
-        default_factory=dict
-    )
-    idx_column_style: dict[int, Style | Callable[[Any], Style]] = Field(
-        default_factory=dict
-    )
-    column_width: dict[str, int] = Field(default_factory=dict)
-    idx_column_width: dict[int, int] = Field(default_factory=dict)
-    row_style: dict[int, Style] = Field(default_factory=dict)
-    max_col_width: int | None = Field(default=None)
-    header_filters: bool = Field(default=True)
-    default_style: bool = Field(default=True)
-    auto_width_tuning: int | None = Field(default=None)
+    auto_size: bool = Field(default=True)
     auto_width_padding: int | None = Field(default=None)
-    merge_equal_headers: bool = Field(default=True)
-    wrap_header: bool = Field(default=False)
+    auto_width_tuning: int | None = Field(default=None)
+    body_style: Style = Field(default_factory=Style)
+    column_style: dict[str, Style | StyleFunc] = Field(default_factory=dict)
+    column_width: dict[str, int] = Field(default_factory=dict)
+    default_style: bool = Field(default=True)
+    header_filters: bool = Field(default=True)
+    header_style: dict[str, Style] = Field(default_factory=dict)
+    idx_column_style: dict[int, Style | StyleFunc] = Field(default_factory=dict)
+    idx_column_width: dict[int, int] = Field(default_factory=dict)
     max_col_size: int | None = Field(default=None)
+    max_col_width: int | None = Field(default=None)
+    merge_equal_headers: bool = Field(default=True)
     min_col_size: int | None = Field(default=None)
+    row_style: dict[int, Style] = Field(default_factory=dict)
+    wrap_header: bool = Field(default=False)
 
     def with_stripes(
         self,
@@ -201,10 +219,10 @@ class Table(BaseComponent):
         )
 
 
-class Group(BaseModel):
+class Group(BaseComponent):
     type: Literal["group"] = Field(default="group")
-    name: str = Field(default="")
     components: Sequence["Component"] = Field(default_factory=list)
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
