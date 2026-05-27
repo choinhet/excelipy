@@ -17,9 +17,22 @@ from pydantic_core import core_schema
 from typing_extensions import Self
 
 AlignOptions = Literal[
-    "left", "center", "right", "fill", "justify", "center_across", "distributed"
+    "left",
+    "center",
+    "right",
+    "fill",
+    "justify",
+    "center_across",
+    "distributed",
 ]
-VAlignOptions = Literal["top", "vcenter", "bottom", "vcenter", "bottom", "vjustify"]
+VAlignOptions = Literal[
+    "top",
+    "vcenter",
+    "bottom",
+    "vcenter",
+    "bottom",
+    "vjustify",
+]
 
 
 class Style(BaseModel):
