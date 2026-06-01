@@ -168,20 +168,25 @@ def write_table(
         header_format = process_style(workbook, [header_style])
         worksheet.write(origin[1], origin[0] + col_idx, cur_col, header_format)
         if component.merge_equal_headers:
-            if prev is not None and prev != cur_col and col_idx - min_idx > 1:
-                worksheet.merge_range(
-                    first_row=origin[1],
-                    first_col=origin[0] + min_idx,
-                    last_row=origin[1],
-                    last_col=origin[0] + col_idx - 1,
-                    data=prev,
-                    cell_format=prev_format,
-                )
-            if prev is not None and prev != cur_col:
-                for _idx in range(min_idx, col_idx):
-                    column_ranges.remove((_idx, _idx))
-                column_ranges.append((min_idx, col_idx - 1))
-                column_ranges.sort(key=lambda x: x[0])
+            last_idx = len(df_columns) - 1
+            group_ends = prev is not None and (cur_col != prev or col_idx == last_idx)
+            end_idx = (
+                col_idx if (col_idx == last_idx and cur_col == prev) else col_idx - 1
+            )
+            if group_ends:
+                if end_idx > min_idx:
+                    worksheet.merge_range(
+                        first_row=origin[1],
+                        first_col=origin[0] + min_idx,
+                        last_row=origin[1],
+                        last_col=origin[0] + end_idx,
+                        data=prev,
+                        cell_format=prev_format,
+                    )
+                    for _idx in range(min_idx, end_idx + 1):
+                        column_ranges.remove((_idx, _idx))
+                    column_ranges.append((min_idx, end_idx))
+                    column_ranges.sort(key=lambda x: x[0])
                 min_idx = col_idx
             prev = cur_col
             prev_format = header_format
