@@ -22,26 +22,52 @@ import xlsxwriter
 
 import excelipy as ep
 from excelipy.writers.table import (
+    COL_CACHE_NAME,
     DEFAULT_FONT_FAMILY,
     DEFAULT_FONT_SIZE,
     DEFAULT_LINE_SPACING,
     ROW_CACHE_NAME,
+    _display_text,
+    _excel_to_px,
     _load_font,
     _max_digit_px,
+    get_text_px,
     write_table,
 )
 
 PLACEHOLDER = "? lines"
 
 
-def measure(table: ep.Table, style: ep.Style) -> dict[int, float]:
-    """Row heights excelipy would set for this table, without writing a file."""
+def measure(
+    table: ep.Table, style: ep.Style
+) -> tuple[dict[int, int], dict[int, float]]:
+    """What excelipy would give this table, without writing a file."""
     workbook = xlsxwriter.Workbook(io.BytesIO())
     worksheet = workbook.add_worksheet()
     write_table(workbook, worksheet, table, style)
+    widths = dict(getattr(worksheet, COL_CACHE_NAME, {}))
     heights = dict(getattr(worksheet, ROW_CACHE_NAME, {}))
     workbook.close()
-    return heights
+    return widths, heights
+
+
+def metrics(frame: pd.DataFrame, width: int, font_sizes: dict[int, int]) -> str:
+    """
+    The numbers behind the decision, for the first column of the table.
+
+    These are what a row height is argued from, and they depend on the fonts
+    installed here, so they are written into the sheet: a picture of the sheet
+    is then enough to see why a row came out the way it did.
+    """
+    capacity = _excel_to_px(width)
+    shown = [
+        f"{get_text_px(_display_text(value, ep.Style()), font_sizes.get(idx)):.0f}"
+        for idx, value in enumerate(frame.iloc[:, 0])
+    ]
+    return (
+        f"[{width} units = {capacity:.0f}px of room; "
+        f"text measures {', '.join(shown)}px]"
+    )
 
 
 def expected(height: float | None, font_size: int | None) -> str:
@@ -76,7 +102,7 @@ def case(
 
     with_expect = frame.copy()
     with_expect["excelipy says"] = [PLACEHOLDER] * rows
-    heights = measure(
+    widths, heights = measure(
         ep.Table(data=with_expect, row_style=row_style, **table_args), sheet_style
     )
     with_expect["excelipy says"] = [
@@ -85,7 +111,10 @@ def case(
     sheet = ep.Sheet(
         name=name,
         components=[
-            ep.Text(text=look_for, style=ep.Style(bold=True)),
+            ep.Text(
+                text=f"{look_for}  {metrics(frame, widths.get(0, 0), font_sizes)}",
+                style=ep.Style(bold=True),
+            ),
             ep.Table(
                 data=with_expect,
                 row_style=row_style,

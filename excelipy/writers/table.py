@@ -29,6 +29,13 @@ PADDING_DEFAULT = 2
 # 11pt up to a 15px em reads every string 2% wide.
 PX_PER_POINT = 96 / 72
 
+# Fonts are measured at this multiple of their real size and scaled back down.
+# A hinted font rounds its advances to whole pixels at text sizes, by a
+# different amount on every platform and in every font; measured large, the
+# rounding is a rounding error and what comes back is the advance the glyph was
+# drawn with - which is what Excel lays text out on.
+MEASURE_SCALE = 10
+
 # Excel sizes columns in units of the font's widest digit and keeps 5 pixels of
 # every cell for padding and the gridline, plus room for a filter button in a
 # header that carries one.
@@ -83,7 +90,7 @@ def _load_font(
     font_family: str,
     font_size: int,
 ) -> ImageFont.ImageFont | ImageFont.FreeTypeFont:
-    size_px = font_size * PX_PER_POINT
+    size_px = font_size * PX_PER_POINT * MEASURE_SCALE
     for candidate in _font_candidates(font_family):
         try:
             return ImageFont.truetype(candidate, size_px)
@@ -118,13 +125,18 @@ def _px_to_excel(px: float) -> int:
     return math.ceil((px + EXCEL_PADDING_PX) / _max_digit_px()) + PADDING_DEFAULT
 
 
+def _measure_px(text: str, font_size: int, font_family: str) -> float:
+    """One line of text, in pixels at the font's real size."""
+    return _load_font(font_family, font_size).getlength(text) / MEASURE_SCALE
+
+
 @lru_cache
 def get_char_size(
     char: str,
     font_size: int,
     font_family: str,
 ) -> int | float:
-    return _load_font(font_family, font_size).getlength(char)
+    return _measure_px(char, font_size, font_family)
 
 
 @lru_cache(maxsize=1 << 16)
@@ -148,11 +160,9 @@ def get_text_px(
         >>> get_text_px("")
         0.0
     """
-    font = _load_font(
-        font_family or DEFAULT_FONT_FAMILY,
-        font_size or DEFAULT_FONT_SIZE,
-    )
-    return max(font.getlength(line) for line in str(text).split("\n"))
+    family = font_family or DEFAULT_FONT_FAMILY
+    size = font_size or DEFAULT_FONT_SIZE
+    return max(_measure_px(line, size, family) for line in str(text).split("\n"))
 
 
 def get_text_size(
