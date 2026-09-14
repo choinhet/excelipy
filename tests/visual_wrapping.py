@@ -22,10 +22,12 @@ import xlsxwriter
 
 import excelipy as ep
 from excelipy.writers.table import (
+    DEFAULT_FONT_FAMILY,
     DEFAULT_FONT_SIZE,
     DEFAULT_LINE_SPACING,
-    DEFAULT_ROW_HEIGHT,
     ROW_CACHE_NAME,
+    _load_font,
+    _max_digit_px,
     write_table,
 )
 
@@ -45,11 +47,11 @@ def measure(table: ep.Table, style: ep.Style) -> dict[int, float]:
 def expected(height: float | None, font_size: int | None) -> str:
     """The row height read back as a line count, which is what you can see."""
     if height is None:
-        return "1 line"
-    lines = round(height / ((font_size or DEFAULT_FONT_SIZE) * DEFAULT_LINE_SPACING))
-    if height <= DEFAULT_ROW_HEIGHT:
-        return "1 line"
-    return f"{lines} lines"
+        lines = 1
+    else:
+        size = font_size or DEFAULT_FONT_SIZE
+        lines = max(round(height / (size * DEFAULT_LINE_SPACING)), 1)
+    return "1 line" if lines == 1 else f"{lines} lines"
 
 
 class Case(NamedTuple):
@@ -233,7 +235,10 @@ def build() -> list[Case]:
 def main(out: Path) -> None:
     cases = build()
     ep.save(ep.Excel(path=out, sheets=[c.sheet for c in cases]))
+    path = getattr(_load_font(DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE), "path", None)
+    using = path if isinstance(path, str) else f"a stand-in for {DEFAULT_FONT_FAMILY}"
     print(f"wrote {out}")
+    print(f"measured with {using}, one column unit = {_max_digit_px():.1f}px")
     print("open it and check every row against what excelipy says it needs:\n")
     for cur in cases:
         print(f"  {cur.sheet.name:26} {', '.join(cur.expectations)}")

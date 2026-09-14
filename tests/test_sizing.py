@@ -9,6 +9,9 @@ import xlsxwriter
 
 import excelipy as ep
 from excelipy.writers.table import (
+    DEFAULT_FONT_SIZE,
+    DEFAULT_LINE_SPACING,
+    PADDING_DEFAULT,
     _excel_to_px,
     count_lines,
     get_row_height,
@@ -16,6 +19,14 @@ from excelipy.writers.table import (
     get_text_size,
     write_table,
 )
+
+
+def lines(heights: dict[int, float], row: int, font_size: int | None = None) -> int:
+    """The line count a written row height stands for."""
+    height = heights.get(row)
+    if height is None:
+        return 1
+    return round(height / ((font_size or DEFAULT_FONT_SIZE) * DEFAULT_LINE_SPACING))
 
 
 def write(table: ep.Table, style: ep.Style | None = None) -> tuple[dict, dict]:
@@ -57,7 +68,7 @@ def test_row_height_follows_the_formatted_value(percent_df: pd.DataFrame):
     )
     # Sized for "7.14%", not for the 0.0714285714285714 behind it
     assert widths[0] == get_text_size("7.14%")
-    assert heights == {}
+    assert all(lines(heights, row) == 1 for row in range(1, 5))
 
 
 def test_long_text_still_wraps():
@@ -83,14 +94,13 @@ def test_auto_sized_column_never_wraps_its_own_text():
         assert count_lines(text, _excel_to_px(get_text_size(text))) == 1
 
 
-def test_column_wider_than_the_tuned_estimate_stays_on_one_line():
+def test_column_narrower_than_the_padded_measure_stays_on_one_line():
     """
-    A column's real capacity is its width in digits, not its width in tuning
-    units, so text measuring wider than the column can still fit on one line.
+    Auto width adds breathing room on top of what the text needs, so a column
+    trimmed back by that padding still holds the text on one line.
     """
     text = "some short text"
-    width = 14
-    assert get_text_size(text) > width
+    width = get_text_size(text) - PADDING_DEFAULT
     assert count_lines(text, _excel_to_px(width)) == 1
     _, heights = write(
         ep.Table(
@@ -99,7 +109,7 @@ def test_column_wider_than_the_tuned_estimate_stays_on_one_line():
             column_width={"col": width},
         )
     )
-    assert heights == {}
+    assert lines(heights, 1) == 1
 
 
 def test_embedded_newlines_grow_the_row_even_when_the_text_fits():
@@ -137,8 +147,8 @@ def test_bigger_fonts_need_more_lines_in_the_same_column():
                 body_style=ep.Style(font_size=size),
             )
         )
-        per_size[size] = round(heights[1] / (size * 1.4))
-    assert per_size[8] < per_size[11] < per_size[18]
+        per_size[size] = lines(heights, 1, size)
+    assert per_size[8] <= per_size[11] < per_size[18]
 
 
 def test_cells_that_cannot_wrap_do_not_grow_rows():
@@ -150,7 +160,7 @@ def test_cells_that_cannot_wrap_do_not_grow_rows():
             body_style=ep.Style(text_wrap=False),
         )
     )
-    assert heights == {}
+    assert heights == {}  # nothing wraps, so no row is given a height at all
 
 
 def test_row_heights_only_grow():
@@ -207,7 +217,7 @@ def test_dates_and_missing_values_are_measured_as_shown():
         )
     )
     assert widths[0] <= get_text_size("23 - January")
-    assert heights == {}
+    assert all(lines(heights, row) == 1 for row in (1, 2))
 
 
 if __name__ == "__main__":

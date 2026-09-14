@@ -21,14 +21,18 @@ DEFAULT_LINE_SPACING = 1.4
 DEFAULT_ROW_HEIGHT = 15.0
 DEFAULT_FONT_FAMILY = "Calibri"
 
-TUNING_DEFAULT = 5
 PADDING_DEFAULT = 2
 
+# Excel draws at 96 dpi, where a point is 96/72 of a pixel. Pillow sizes a font
+# in pixels, so a font asked for at its point size comes out a quarter too
+# small and every string measures short.
+PX_PER_POINT = 96 / 72
+
 # Excel sizes columns in units of the font's widest digit and keeps 5 pixels of
-# every cell for padding and the gridline. 7px is that digit at the default
-# 11pt Calibri, which turns the 5px into the fraction of a digit it is worth.
+# every cell for padding and the gridline, plus room for a filter button in a
+# header that carries one.
 EXCEL_PADDING_PX = 5
-EXCEL_DIGIT_PX = 7
+FILTER_BUTTON_PX = 16
 
 ROW_WISE_ARG = "_excelipy_row_wise"
 COL_CACHE_NAME = "_excelipy_col_sizes"
@@ -74,22 +78,37 @@ def _load_font(
     font_family: str,
     font_size: int,
 ) -> ImageFont.ImageFont | ImageFont.FreeTypeFont:
+    size_px = round(font_size * PX_PER_POINT)
     for candidate in _font_candidates(font_family):
         try:
-            return ImageFont.truetype(candidate, font_size)
+            return ImageFont.truetype(candidate, size_px)
         except Exception as e:
             log.debug(f"Could not load font file {candidate}.\nException: {e}")
     log.debug(f"Could not load custom font {font_family}, using default.")
     try:
-        # Keeps metrics proportional to the font size, which the unsized
-        # default font does not do - every size would measure like 11pt.
-        return ImageFont.load_default(size=font_size)
+        # Sized, so metrics stay proportional to the font: the unsized default
+        # font would measure every size like the default one.
+        return ImageFont.load_default(size=size_px)
     except TypeError:  # pragma: no cover - Pillow < 10.1
         return ImageFont.load_default()
 
 
+def _max_digit_px() -> float:
+    """
+    Width of the digit zero in the workbook's default font.
+
+    This is the unit Excel measures columns in, so it is taken from the default
+    font whatever font a cell itself uses.
+    """
+    return get_char_size("0", DEFAULT_FONT_SIZE, DEFAULT_FONT_FAMILY)
+
+
 def _px_to_excel(px: float) -> int:
-    return int(px // TUNING_DEFAULT + PADDING_DEFAULT)
+    """
+    Column units needed to show ``px`` pixels of text, Excel's own formula
+    plus :data:`PADDING_DEFAULT` units of breathing room.
+    """
+    return math.ceil((px + EXCEL_PADDING_PX) / _max_digit_px()) + PADDING_DEFAULT
 
 
 @lru_cache
@@ -132,36 +151,23 @@ def get_text_size(
     return _px_to_excel(get_text_px(text, font_size, font_family))
 
 
-def _excel_to_px(size: float) -> float:
+def _excel_to_px(size: float, filtered: bool = False) -> float:
     """
     How many pixels of text a column (or merged span) of ``size`` fits.
 
-    A column's unit is the width of the digit zero in the workbook's default
-    font - not in the cell's own font - of which Excel keeps
-    ``EXCEL_PADDING_PX`` for padding and the gridline. That is Excel's own
-    width formula. Going through :data:`TUNING_DEFAULT` instead would
-    understate a column by about a fifth, which is what wraps a clamped
-    column's text that Excel draws on one line.
-
-    A column is therefore a fixed width in pixels, and a cell in a larger font
-    fits less of it - which is why the text is measured in its own font while
-    the column is measured in the default one.
-
-    The floor is :func:`_px_to_excel` read backwards, so a column is never
-    considered too narrow for the very text it was sized from.
+    A column is a fixed width in pixels - ``size`` digits of the default font,
+    less the padding Excel keeps and the filter button if the cell carries one.
+    A cell in a larger font fits less of it, which is why text is measured in
+    its own font and the column in the default one.
 
     Examples:
         >>> _excel_to_px(_px_to_excel(83.0)) >= 83.0
         True
-        >>> _excel_to_px(20) > 20 * get_char_size("0", 11, "Calibri") * 0.9
-        True
-        >>> _excel_to_px(20) == _excel_to_px(20)  # not a function of the cell font
+        >>> _excel_to_px(20, filtered=True) < _excel_to_px(20)
         True
     """
-    digit_px = get_char_size("0", DEFAULT_FONT_SIZE, DEFAULT_FONT_FAMILY)
-    excel_px = (size - EXCEL_PADDING_PX / EXCEL_DIGIT_PX) * digit_px
-    tuned_px = (size - PADDING_DEFAULT + 1) * TUNING_DEFAULT
-    return max(excel_px, tuned_px, 0)
+    taken = EXCEL_PADDING_PX + (FILTER_BUTTON_PX if filtered else 0)
+    return max(size * _max_digit_px() - taken, 0.0)
 
 
 def count_lines(
@@ -336,28 +342,30 @@ def _fit_row(
     row: int,
     measure: _Measure,
     available_size: int,
+    filtered: bool = False,
 ) -> None:
     """
-    Grow ``row`` so a wrapped cell fits, leaving it untouched when it already does.
+    Set the height a wrapped cell needs, growing the row but never shrinking it.
 
-    A row is only ever grown: heights are kept per worksheet so a later table
-    (or a narrower column further along the row) cannot shrink a row another
-    cell already needs.
+    Every wrapped row is given an explicit height, one line included. Left
+    without one, Excel picks the height itself, and on text that nearly fills
+    its column it reserves a second line it then draws nothing on - the empty
+    band under a single line of text.
+
+    Heights are kept per worksheet, so a later table (or a narrower column
+    further along the row) cannot take away a height another cell needed.
     """
     if not measure.wraps:
-        # Nothing to grow for: the cell is drawn on one line whatever it holds
+        # Drawn on one line whatever it holds, so the row is not ours to size
         return
-    if "\n" not in measure.text and measure.size <= available_size:
-        # Fits on one line, and has no break of its own to honour
-        return
-    lines = count_lines(
-        measure.text,
-        _excel_to_px(available_size),
-        measure.font_size,
-        measure.font_family,
-    )
-    if lines <= 1:
-        return
+    lines = 1
+    if "\n" in measure.text or measure.size > available_size:
+        lines = count_lines(
+            measure.text,
+            _excel_to_px(available_size, filtered),
+            measure.font_size,
+            measure.font_family,
+        )
     height = get_row_height(lines, measure.font_size)
     heights = getattr(worksheet, ROW_CACHE_NAME, None)
     if heights is None:
@@ -586,7 +594,13 @@ def write_table(
             span_size = sum(
                 col_sizes[origin[0] + col_idx] for col_idx in range(beg, end + 1)
             )
-            _fit_row(worksheet, origin[1], measure, span_size)
+            _fit_row(
+                worksheet,
+                origin[1],
+                measure,
+                span_size,
+                filtered=component.header_filters and not actually_merged,
+            )
         # row wrap body
         for col, rows in body_size_cache.items():
             col_size = col_sizes[origin[0] + col]
