@@ -162,23 +162,20 @@ def test_bigger_fonts_need_more_lines_in_the_same_column():
 
 
 def test_hyphenated_token_breaks_after_its_dashes():
-    """
-    Excel ends a line on a dash rather than cutting a word anywhere, which
-    leaves the tail of each line empty and costs a line the width alone allows.
-    """
+    """Excel ends a line on a dash rather than cutting a word wherever it likes."""
     token = "one-unbroken-token-far-too-long-for-any-of-these-columns-to-hold-it"
     room = _excel_to_px(20)
 
-    packed, current = 1, ""
+    packed: list[str] = [""]
     for chunk in _break_chunks(token):
-        if get_text_px(current + chunk) <= room + FIT_TOLERANCE_PX:
-            current += chunk
+        if get_text_px(packed[-1] + chunk) <= room + FIT_TOLERANCE_PX:
+            packed[-1] += chunk
         else:
-            packed += 1
-            current = chunk
+            packed.append(chunk)
 
-    assert count_lines(token, room) == packed
-    assert packed > math.ceil(get_text_px(token) / room)
+    assert len(packed) > 1, "pick a narrower column: this has to wrap to mean anything"
+    assert all(line.endswith("-") for line in packed[:-1])
+    assert count_lines(token, room) == len(packed)
 
 
 def test_text_is_measured_in_the_cell_font_not_the_default_one():

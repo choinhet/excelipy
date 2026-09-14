@@ -108,16 +108,28 @@ def _load_font(
         return ImageFont.load_default()
 
 
-def _max_digit_px() -> float:
+def _max_digit_px() -> int:
     """
-    Width of the digit zero in the workbook's default font.
+    Width of the digit zero in the workbook's default font, in whole pixels.
 
     This is the unit Excel measures columns in, so it comes from the default
-    font whatever font a cell itself uses. It is kept fractional: rounding the
-    unit down takes a pixel off every column of a wide table, which is enough
-    to wrap text Excel has room for.
+    font whatever font a cell itself uses, and it is a whole number of pixels:
+    Excel's column arithmetic is done in pixels of a rendered digit. For the
+    Calibri 11 this writes by default, that is the documented 7.
     """
-    return get_char_size("0", DEFAULT_FONT_SIZE, DEFAULT_FONT_FAMILY)
+    return max(round(get_char_size("0", DEFAULT_FONT_SIZE, DEFAULT_FONT_FAMILY)), 1)
+
+
+def _column_px(size: float) -> float:
+    """
+    The pixels Excel gives a column of ``size`` units, by its own conversion.
+
+    Examples:
+        >>> _column_px(0)
+        0.0
+    """
+    digit = _max_digit_px()
+    return float(math.trunc(((256 * size + math.trunc(128 / digit)) / 256) * digit))
 
 
 def _px_to_excel(px: float) -> int:
@@ -185,6 +197,10 @@ def _excel_to_px(size: float, filtered: bool = False) -> float:
     A cell in a larger font fits less of it, which is why text is measured in
     its own font and the column in the default one.
 
+    The pixels come from Excel's own conversion, which works in whole digits.
+    Reading a column back through a fractional digit makes it some 6% wider
+    than Excel draws it, and text Excel wraps then fits.
+
     Examples:
         >>> _excel_to_px(_px_to_excel(83.0)) >= 83.0
         True
@@ -192,7 +208,7 @@ def _excel_to_px(size: float, filtered: bool = False) -> float:
         True
     """
     taken = EXCEL_PADDING_PX + (FILTER_BUTTON_PX if filtered else 0)
-    return max(size * _max_digit_px() - taken, 0.0)
+    return max(_column_px(size) - taken, 0.0)
 
 
 def _break_chunks(word: str) -> list[str]:
