@@ -15,6 +15,7 @@ from excelipy.writers.table import (
     PADDING_DEFAULT,
     _break_chunks,
     _excel_to_px,
+    _font_candidates,
     _load_font,
     _max_digit_px,
     _px_to_excel,
@@ -192,6 +193,48 @@ def test_hyphenated_token_breaks_after_its_dashes():
     assert len(packed) > 1, "pick a narrower column: this has to wrap to mean anything"
     assert all(line.endswith("-") for line in packed[:-1])
     assert count_lines(token, room) == len(packed)
+
+
+def test_fonts_are_looked_for_under_the_names_they_are_installed_as():
+    """
+    Windows abbreviates its font files and a Linux box carries substitutes, so
+    a family whose file is named after it is the exception, not the rule. Miss
+    the real name and Pillow quietly measures a stand-in instead.
+    """
+    assert "times.ttf" in _font_candidates("Times New Roman")
+    assert "cour.ttf" in _font_candidates("Courier New")
+    assert "trebuc.ttf" in _font_candidates("Trebuchet MS")
+    assert "arial.ttf" in _font_candidates("Arial")
+    assert "LiberationSerif-Regular.ttf" in _font_candidates("Times New Roman")
+    assert "Carlito-Regular.ttf" in _font_candidates("Calibri")
+
+
+def test_a_font_that_is_not_installed_falls_back_to_a_stand_in():
+    """
+    Nothing is measured against Excel in that case, but the stand-in still has
+    to scale with the font size - measuring every size alike would put a large
+    font's text in a row sized for a small one.
+    """
+    missing = "No Such Font Is Installed"
+    assert not _installed(missing)
+    small = get_text_px("some text", 8, missing)
+    large = get_text_px("some text", 24, missing)
+    assert 0 < small < large
+
+
+def test_three_fonts_in_one_column_wrap_three_different_ways():
+    """Each is measured in its own metrics, so each takes its own line count."""
+    families = ("Times New Roman", "Calibri", "Courier New")
+    if not all(_installed(family) for family in families):
+        pytest.skip("needs all three fonts installed to mean anything")
+
+    text = "the font decides where this wraps"
+    room = _excel_to_px(15)
+    counts = [count_lines(text, room, None, family) for family in families]
+
+    # Narrowest to widest: a serif, the default, then a monospace
+    assert counts == sorted(counts)
+    assert counts[0] < counts[-1]
 
 
 def test_text_is_measured_in_the_cell_font_not_the_default_one():

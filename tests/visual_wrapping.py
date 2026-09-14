@@ -299,6 +299,37 @@ def build() -> list[Case]:
             wrap_header=True,
             max_col_size=20,
         ),
+        case(
+            "19 times new roman",
+            "A serif narrower than Calibri: two lines where Calibri needs three.",
+            {"text": ["the font decides where this wraps", LONG, "tiny"]},
+            font_family="Times New Roman",
+            wrap_header=True,
+            column_width={"text": 15},
+        ),
+        case(
+            "20 courier new",
+            "A monospace far wider than Calibri: four lines, not three.",
+            {"text": ["the font decides where this wraps", LONG]},
+            font_family="Courier New",
+            wrap_header=True,
+            column_width={"text": 15},
+        ),
+        case(
+            "21 calibri for comparison",
+            "The same text and widths as sheets 19 and 20, in Calibri: three lines.",
+            {"text": ["the font decides where this wraps", LONG]},
+            wrap_header=True,
+            column_width={"text": 15},
+        ),
+        case(
+            "22 arial header with filter",
+            "A wrapped Arial header, leaving room for the filter button beside it.",
+            {"a header long enough that it has to wrap over its column": [1, 2]},
+            font_family="Arial",
+            wrap_header=True,
+            max_col_size=20,
+        ),
     ]
 
 

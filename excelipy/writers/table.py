@@ -71,20 +71,43 @@ def _static_col_style(component: Table, col_name: str, col_idx: int) -> Style:
     return Style() if callable(maybe) or maybe is None else maybe
 
 
+# Files a font is installed as where that is not simply its name: Windows
+# abbreviates its own, and a machine without the font itself is likely to carry
+# the metric-compatible substitute, which measures the same by design.
+FONT_FILE_ALIASES = {
+    "arial": ("arial.ttf", "LiberationSans-Regular.ttf"),
+    "book antiqua": ("bkant.ttf",),
+    "calibri": ("calibri.ttf", "Carlito-Regular.ttf"),
+    "cambria": ("cambria.ttf", "Caladea-Regular.ttf"),
+    "century gothic": ("gothic.ttf",),
+    "comic sans ms": ("comic.ttf",),
+    "consolas": ("consola.ttf",),
+    "courier new": ("cour.ttf", "LiberationMono-Regular.ttf"),
+    "garamond": ("gara.ttf",),
+    "lucida console": ("lucon.ttf",),
+    "palatino linotype": ("pala.ttf",),
+    "segoe ui": ("segoeui.ttf",),
+    "times new roman": ("times.ttf", "LiberationSerif-Regular.ttf"),
+    "trebuchet ms": ("trebuc.ttf",),
+}
+
+
 def _font_candidates(font_family: str) -> tuple[str, ...]:
     """
-    File names a font family is likely installed under.
+    File names a font family is likely installed under, best guess first.
 
     Examples:
-        >>> _font_candidates("Times New Roman")
-        ('times new roman.ttf', 'timesnewroman.ttf', 'Times New Roman.ttf', 'TimesNewRoman.ttf')
+        >>> _font_candidates("Verdana")
+        ('verdana.ttf', 'Verdana.ttf')
+        >>> "times.ttf" in _font_candidates("Times New Roman")
+        True
     """
     lower = font_family.lower()
     packed = font_family.replace(" ", "")
     names = (lower, lower.replace(" ", ""), font_family, packed)
-    seen = {}
-    for name in names:
-        seen[f"{name}.ttf"] = None
+    seen = {f"{name}.ttf": None for name in names}
+    for alias in FONT_FILE_ALIASES.get(lower, ()):
+        seen[alias] = None
     return tuple(seen)
 
 
