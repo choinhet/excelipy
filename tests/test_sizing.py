@@ -1,0 +1,360 @@
+import io
+import math
+import random
+import string
+
+import pandas as pd
+import pytest
+import xlsxwriter
+
+import excelipy as ep
+from excelipy.writers.table import (
+    DEFAULT_FONT_SIZE,
+    DEFAULT_LINE_SPACING,
+    FIT_TOLERANCE_PX,
+    PADDING_DEFAULT,
+    _break_chunks,
+    _excel_to_px,
+    _font_candidates,
+    _line_px,
+    _load_font,
+    _max_digit_px,
+    _px_to_excel,
+    count_lines,
+    get_row_height,
+    get_text_px,
+    get_text_size,
+    write_table,
+)
+
+
+def _installed(family: str) -> bool:
+    """Whether this font resolves to a real file rather than a stand-in."""
+    path = getattr(_load_font(family, DEFAULT_FONT_SIZE), "path", None)
+    return isinstance(path, str)
+
+
+def lines(heights: dict[int, float], row: int, font_size: int | None = None) -> int:
+    """The line count a written row height stands for."""
+    height = heights.get(row)
+    if height is None:
+        return 1
+    return round(height / ((font_size or DEFAULT_FONT_SIZE) * DEFAULT_LINE_SPACING))
+
+
+def write(table: ep.Table, style: ep.Style | None = None) -> tuple[dict, dict]:
+    """Write a table to a throwaway workbook, returning its column widths and row heights."""
+    workbook = xlsxwriter.Workbook(io.BytesIO())
+    worksheet = workbook.add_worksheet()
+    heights: dict[int, float] = {}
+    original = worksheet.set_row
+
+    def set_row(row, height, *args, **kwargs):
+        heights[row] = height
+        return original(row, height, *args, **kwargs)
+
+    worksheet.set_row = set_row
+    write_table(workbook, worksheet, table, style or ep.Style())
+    widths = dict(getattr(worksheet, "_excelipy_col_sizes"))
+    workbook.close()
+    return widths, heights
+
+
+@pytest.fixture
+def percent_df() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "ratio": [0.0714285714285714, 0.021818181818, 0.0559, 0.000344],
+        }
+    )
+
+
+def test_row_height_follows_the_formatted_value(percent_df: pd.DataFrame):
+    """A ratio shown as ``7.14%`` must not be sized as ``0.0714285714285714``."""
+    widths, heights = write(
+        ep.Table(
+            data=percent_df,
+            wrap_header=True,
+            max_col_size=18,
+            column_style={"ratio": ep.Style(numeric_format=".2%")},
+        )
+    )
+    # Sized for "7.14%", not for the 0.0714285714285714 behind it
+    assert widths[0] == get_text_size("7.14%")
+    assert all(lines(heights, row) == 1 for row in range(1, 5))
+
+
+def test_long_text_still_wraps():
+    text = "a sentence long enough that no sensible column can hold it in one line"
+    _, heights = write(
+        ep.Table(
+            data=pd.DataFrame({"col": [text]}),
+            wrap_header=True,
+            max_col_size=20,
+        )
+    )
+    lines = count_lines(text, _excel_to_px(20))
+    assert lines > 1
+    assert heights[1] == pytest.approx(get_row_height(lines, None))
+
+
+def test_auto_sized_column_never_wraps_its_own_text():
+    """The invariant behind auto sizing: a column fits the text it was measured from."""
+    random.seed(7)
+    alphabet = string.ascii_letters + string.digits + " .-()%"
+    for _ in range(200):
+        text = "".join(random.choice(alphabet) for _ in range(random.randint(1, 80)))
+        assert count_lines(text, _excel_to_px(get_text_size(text))) == 1
+
+
+def test_column_narrower_than_the_padded_measure_stays_on_one_line():
+    """
+    Auto width adds breathing room on top of what the text needs, so a column
+    trimmed back by that padding still holds the text on one line.
+    """
+    text = "some short text"
+    width = get_text_size(text) - PADDING_DEFAULT
+    assert count_lines(text, _excel_to_px(width)) == 1
+    _, heights = write(
+        ep.Table(
+            data=pd.DataFrame({"col": [text]}),
+            wrap_header=True,
+            column_width={"col": width},
+        )
+    )
+    assert lines(heights, 1) == 1
+
+
+def test_embedded_newlines_grow_the_row_even_when_the_text_fits():
+    """A cell that fits across is still two lines tall if it carries a break."""
+    _, heights = write(
+        ep.Table(
+            data=pd.DataFrame({"col": ["first\nsecond"]}),
+            wrap_header=True,
+            max_col_size=40,
+        )
+    )
+    assert heights[1] == pytest.approx(get_row_height(2, None))
+
+
+def test_multiline_text_is_sized_by_its_widest_line():
+    widths, _ = write(
+        ep.Table(
+            data=pd.DataFrame({"col": ["a much wider first line\nshort"]}),
+            wrap_header=True,
+        )
+    )
+    assert widths[0] == get_text_size("a much wider first line")
+
+
+def test_bigger_fonts_need_more_lines_in_the_same_column():
+    """A column is a fixed width, so a larger font fits less of it per line."""
+    text = "a sentence long enough that no sensible column can hold it on one line"
+    per_size = {}
+    for size in (8, 11, 18):
+        _, heights = write(
+            ep.Table(
+                data=pd.DataFrame({"col": [text]}),
+                wrap_header=True,
+                max_col_size=30,
+                body_style=ep.Style(font_size=size),
+            )
+        )
+        per_size[size] = lines(heights, 1, size)
+    assert per_size[8] <= per_size[11] < per_size[18]
+
+
+def test_the_column_unit_is_the_width_excel_draws_a_digit():
+    """
+    Excel's unit for Calibri 11 is 7 pixels, and columns are sized and read
+    back through it. A digit measures anywhere from 7.4 to 7.9 depending on
+    the font file, and every one of those has to come to 7 - rounding one up
+    gives every column a seventh more room than Excel gives it.
+    """
+    if not _installed("Calibri"):
+        pytest.skip("needs Calibri installed to mean anything")
+    assert 7 <= get_text_px("0") < 8
+    assert _max_digit_px() == 7
+    # Excel's own conversion, for a column of 20 units
+    assert _excel_to_px(20) == 135
+
+
+def test_wrapping_a_cell_costs_one_pass_over_its_text():
+    """
+    Wrapping keeps a running width instead of measuring each candidate line, so
+    twice the text costs twice the measuring, not four times. Counted in calls
+    rather than seconds, which a loaded machine would make meaningless.
+    """
+    room = _excel_to_px(20)
+    words = "alpha beta gamma delta epsilon campaign video segment loop message"
+
+    def measurements(repeats: int) -> int:
+        _line_px.cache_clear()
+        count_lines(" ".join([words] * repeats), room)
+        info = _line_px.cache_info()
+        return info.hits + info.misses
+
+    one, eight = measurements(1), measurements(8)
+    assert eight < one * 8 * 2, f"{one} -> {eight} for eight times the text"
+
+
+def test_hyphenated_token_breaks_after_its_dashes():
+    """Excel ends a line on a dash rather than cutting a word wherever it likes."""
+    token = "one-unbroken-token-far-too-long-for-any-of-these-columns-to-hold-it"
+    room = _excel_to_px(20)
+
+    packed: list[str] = [""]
+    for chunk in _break_chunks(token):
+        if get_text_px(packed[-1] + chunk) <= room + FIT_TOLERANCE_PX:
+            packed[-1] += chunk
+        else:
+            packed.append(chunk)
+
+    assert len(packed) > 1, "pick a narrower column: this has to wrap to mean anything"
+    assert all(line.endswith("-") for line in packed[:-1])
+    assert count_lines(token, room) == len(packed)
+
+
+def test_fonts_are_looked_for_under_the_names_they_are_installed_as():
+    """
+    Windows abbreviates its font files and a Linux box carries substitutes, so
+    a family whose file is named after it is the exception, not the rule. Miss
+    the real name and Pillow quietly measures a stand-in instead.
+    """
+    assert "times.ttf" in _font_candidates("Times New Roman")
+    assert "cour.ttf" in _font_candidates("Courier New")
+    assert "trebuc.ttf" in _font_candidates("Trebuchet MS")
+    assert "arial.ttf" in _font_candidates("Arial")
+    assert "LiberationSerif-Regular.ttf" in _font_candidates("Times New Roman")
+    assert "Carlito-Regular.ttf" in _font_candidates("Calibri")
+
+
+def test_a_font_that_is_not_installed_falls_back_to_a_stand_in():
+    """
+    Nothing is measured against Excel in that case, but the stand-in still has
+    to scale with the font size - measuring every size alike would put a large
+    font's text in a row sized for a small one.
+    """
+    missing = "No Such Font Is Installed"
+    assert not _installed(missing)
+    small = get_text_px("some text", 8, missing)
+    large = get_text_px("some text", 24, missing)
+    assert 0 < small < large
+
+
+def test_three_fonts_in_one_column_wrap_three_different_ways():
+    """Each is measured in its own metrics, so each takes its own line count."""
+    families = ("Times New Roman", "Calibri", "Courier New")
+    if not all(_installed(family) for family in families):
+        pytest.skip("needs all three fonts installed to mean anything")
+
+    text = "the font decides where this wraps"
+    room = _excel_to_px(15)
+    counts = [count_lines(text, room, None, family) for family in families]
+
+    # Narrowest to widest: a serif, the default, then a monospace
+    assert counts == sorted(counts)
+    assert counts[0] < counts[-1]
+
+
+def test_text_is_measured_in_the_cell_font_not_the_default_one():
+    """
+    A column is a fixed width in pixels, set by the workbook's default font.
+    Text in a wider font therefore wraps in a column the default font fits.
+    """
+    if not (_installed("Arial") and _installed("Calibri")):
+        pytest.skip("needs both fonts installed to mean anything")
+    text = "wrapping depends on the font"
+
+    # Exactly the room Calibri needs, with none of auto width's breathing room
+    width = _px_to_excel(get_text_px(text, None, "Calibri")) - PADDING_DEFAULT
+
+    def rows_in(family: str) -> int:
+        _, heights = write(
+            ep.Table(
+                data=pd.DataFrame({"col": [text]}),
+                wrap_header=True,
+                column_width={"col": width},
+                style=ep.Style(font_family=family),
+            )
+        )
+        return lines(heights, 1)
+
+    assert rows_in("Calibri") == 1
+    assert rows_in("Arial") > 1
+
+
+def test_cells_that_cannot_wrap_do_not_grow_rows():
+    long_text = "a very long piece of text that overflows its column by a lot"
+    _, heights = write(
+        ep.Table(
+            data=pd.DataFrame({"col": [long_text]}),
+            max_col_size=10,
+            body_style=ep.Style(text_wrap=False),
+        )
+    )
+    assert heights == {}  # nothing wraps, so no row is given a height at all
+
+
+def test_row_heights_only_grow():
+    """A second table sharing a row cannot shrink a height the first one needed."""
+    workbook = xlsxwriter.Workbook(io.BytesIO())
+    worksheet = workbook.add_worksheet()
+    heights: dict[int, float] = {}
+    original = worksheet.set_row
+    worksheet.set_row = lambda row, height, *a, **k: (
+        heights.__setitem__(row, height),
+        original(row, height, *a, **k),
+    )[1]
+
+    tall = ep.Table(
+        data=pd.DataFrame({"col": ["word " * 30]}),
+        wrap_header=True,
+        max_col_size=12,
+    )
+    short = ep.Table(
+        data=pd.DataFrame({"other": ["tiny"]}),
+        wrap_header=True,
+        max_col_size=12,
+    )
+    write_table(workbook, worksheet, tall, ep.Style())
+    grown = heights[1]
+    write_table(workbook, worksheet, short, ep.Style(), origin=(1, 0))
+    workbook.close()
+
+    assert heights[1] == grown
+
+
+def test_count_lines_wraps_on_words_and_newlines():
+    width = _excel_to_px(get_text_size("hello world"))
+    assert count_lines("hello world", width) == 1
+    assert count_lines("hello world hello world", width) == 2
+    assert count_lines("hello\nworld", width) == 2
+    # A single word wider than the line is broken mid-word, as Excel does.
+    # Whole characters have to land on one line or the next, so greedy packing
+    # can cost one line over what the raw width would allow, but never more.
+    narrow = _excel_to_px(get_text_size("x" * 20))
+    ideal = math.ceil(get_text_px("x" * 200) / narrow)
+    assert ideal <= count_lines("x" * 200, narrow) <= ideal + 1
+
+
+def test_dates_and_missing_values_are_measured_as_shown():
+    df = pd.DataFrame(
+        {
+            "when": pd.to_datetime(["2026-01-23", "2026-05-29"]),
+            "what": ["ok", "also ok"],
+        }
+    )
+    widths, heights = write(
+        ep.Table(
+            data=df,
+            wrap_header=True,
+            column_style={"when": ep.Style(numeric_format="%d - %B")},
+        )
+    )
+    assert widths[0] <= get_text_size("23 - January")
+    assert all(lines(heights, row) == 1 for row in (1, 2))
+
+
+if __name__ == "__main__":
+    pytest.main([__file__])
