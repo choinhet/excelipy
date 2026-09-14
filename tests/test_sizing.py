@@ -11,7 +11,9 @@ import excelipy as ep
 from excelipy.writers.table import (
     DEFAULT_FONT_SIZE,
     DEFAULT_LINE_SPACING,
+    FIT_TOLERANCE_PX,
     PADDING_DEFAULT,
+    _break_chunks,
     _excel_to_px,
     count_lines,
     get_row_height,
@@ -149,6 +151,26 @@ def test_bigger_fonts_need_more_lines_in_the_same_column():
         )
         per_size[size] = lines(heights, 1, size)
     assert per_size[8] <= per_size[11] < per_size[18]
+
+
+def test_hyphenated_token_breaks_after_its_dashes():
+    """
+    Excel ends a line on a dash rather than cutting a word anywhere, which
+    leaves the tail of each line empty and costs a line the width alone allows.
+    """
+    token = "one-unbroken-token-far-too-long-for-any-of-these-columns-to-hold-it"
+    room = _excel_to_px(20)
+
+    packed, current = 1, ""
+    for chunk in _break_chunks(token):
+        if get_text_px(current + chunk) <= room + FIT_TOLERANCE_PX:
+            current += chunk
+        else:
+            packed += 1
+            current = chunk
+
+    assert count_lines(token, room) == packed
+    assert packed > math.ceil(get_text_px(token) / room)
 
 
 def test_cells_that_cannot_wrap_do_not_grow_rows():

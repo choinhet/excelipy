@@ -46,6 +46,9 @@ FILTER_BUTTON_PX = 16
 # is drawn, not wrapped.
 FIT_TOLERANCE_PX = 1.0
 
+# Characters a line may end on, dash kept on the line it ends
+BREAK_AFTER_CHARS = "-\u2013\u2014"
+
 ROW_WISE_ARG = "_excelipy_row_wise"
 COL_CACHE_NAME = "_excelipy_col_sizes"
 ROW_CACHE_NAME = "_excelipy_row_heights"
@@ -192,6 +195,31 @@ def _excel_to_px(size: float, filtered: bool = False) -> float:
     return max(size * _max_digit_px() - taken, 0.0)
 
 
+def _break_chunks(word: str) -> list[str]:
+    """
+    The pieces a word can be broken into, each keeping the dash it ends on.
+
+    Excel treats a dash as a place a line may end, so a hyphenated token is
+    laid out a chunk at a time rather than cut wherever the room runs out.
+
+    Examples:
+        >>> _break_chunks("one-unbroken-token")
+        ['one-', 'unbroken-', 'token']
+        >>> _break_chunks("plain")
+        ['plain']
+    """
+    chunks: list[str] = []
+    current = ""
+    for char in word:
+        current += char
+        if char in BREAK_AFTER_CHARS:
+            chunks.append(current)
+            current = ""
+    if current:
+        chunks.append(current)
+    return chunks or [""]
+
+
 def _fits(text: str, available_px: float, size: int | None, family: str | None) -> bool:
     """Whether ``text`` is drawn within ``available_px``, to the nearest pixel."""
     return get_text_px(text, size, family) <= available_px + FIT_TOLERANCE_PX
@@ -230,23 +258,25 @@ def _count_paragraph_lines(
     lines = 1
     current = ""
     for word in paragraph.split(" "):
-        candidate = f"{current} {word}" if current else word
-        if _fits(candidate, available_px, font_size, font_family):
-            current = candidate
-            continue
-        if current:
-            lines += 1
-            current = ""
-        if _fits(word, available_px, font_size, font_family):
-            current = word
-            continue
-        # Wider than a whole line on its own: Excel breaks it mid-word
-        rest = word
-        while not _fits(rest, available_px, font_size, font_family):
-            taken = _longest_prefix(rest, available_px, font_size, font_family)
-            rest = rest[taken:]
-            lines += 1
-        current = rest
+        for idx, chunk in enumerate(_break_chunks(word)):
+            # A word starts after a space; a chunk of one carries straight on
+            gap = " " if current and idx == 0 else ""
+            if _fits(current + gap + chunk, available_px, font_size, font_family):
+                current += gap + chunk
+                continue
+            if current:
+                lines += 1
+                current = ""
+            if _fits(chunk, available_px, font_size, font_family):
+                current = chunk
+                continue
+            # Wider than a whole line on its own: Excel breaks it mid-chunk
+            rest = chunk
+            while not _fits(rest, available_px, font_size, font_family):
+                taken = _longest_prefix(rest, available_px, font_size, font_family)
+                rest = rest[taken:]
+                lines += 1
+            current = rest
     return lines
 
 
