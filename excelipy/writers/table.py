@@ -116,8 +116,20 @@ def _max_digit_px() -> int:
     font whatever font a cell itself uses, and it is a whole number of pixels:
     Excel's column arithmetic is done in pixels of a rendered digit. For the
     Calibri 11 this writes by default, that is the documented 7.
+
+    The fraction is dropped rather than rounded, because that is what a digit
+    renders to: Calibri 11 measures anywhere from 7.4 to 7.9 depending on the
+    font file and the machine, and Excel draws all of them 7 wide. Rounding
+    one of those up to 8 hands every column a seventh more room than it has,
+    and the text Excel wraps into it then fits.
+
+    Examples:
+        >>> _max_digit_px() >= 1
+        True
     """
-    return max(round(get_char_size("0", DEFAULT_FONT_SIZE, DEFAULT_FONT_FAMILY)), 1)
+    return max(
+        math.trunc(get_char_size("0", DEFAULT_FONT_SIZE, DEFAULT_FONT_FAMILY)), 1
+    )
 
 
 def _column_px(size: float) -> float:

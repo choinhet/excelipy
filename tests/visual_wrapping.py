@@ -308,7 +308,11 @@ def main(out: Path) -> None:
     path = getattr(_load_font(DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE), "path", None)
     using = path if isinstance(path, str) else f"a stand-in for {DEFAULT_FONT_FAMILY}"
     print(f"wrote {out}")
-    print(f"measured with {using}, one column unit = {_max_digit_px():.1f}px")
+    exact = get_text_px("0")
+    print(
+        f"measured with {using}, one column unit = {_max_digit_px()}px "
+        f"(a digit measures {exact:.2f}px; Excel draws Calibri 11 at 7)"
+    )
     print("open it and check every row against what excelipy says it needs:\n")
     for cur in cases:
         print(f"  {cur.sheet.name:26} {', '.join(cur.expectations)}")

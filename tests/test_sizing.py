@@ -16,6 +16,7 @@ from excelipy.writers.table import (
     _break_chunks,
     _excel_to_px,
     _load_font,
+    _max_digit_px,
     _px_to_excel,
     count_lines,
     get_row_height,
@@ -159,6 +160,21 @@ def test_bigger_fonts_need_more_lines_in_the_same_column():
         )
         per_size[size] = lines(heights, 1, size)
     assert per_size[8] <= per_size[11] < per_size[18]
+
+
+def test_the_column_unit_is_the_width_excel_draws_a_digit():
+    """
+    Excel's unit for Calibri 11 is 7 pixels, and columns are sized and read
+    back through it. A digit measures anywhere from 7.4 to 7.9 depending on
+    the font file, and every one of those has to come to 7 - rounding one up
+    gives every column a seventh more room than Excel gives it.
+    """
+    if not _installed("Calibri"):
+        pytest.skip("needs Calibri installed to mean anything")
+    assert 7 <= get_text_px("0") < 8
+    assert _max_digit_px() == 7
+    # Excel's own conversion, for a column of 20 units
+    assert _excel_to_px(20) == 135
 
 
 def test_hyphenated_token_breaks_after_its_dashes():
