@@ -182,6 +182,64 @@ def _excel_to_px(size: float, filtered: bool = False) -> float:
     return max(size * _max_digit_px() - taken, 0.0)
 
 
+def _fits(text: str, available_px: float, size: int | None, family: str | None) -> bool:
+    """Whether ``text`` is drawn within ``available_px``, to the nearest pixel."""
+    return get_text_px(text, size, family) <= available_px + FIT_TOLERANCE_PX
+
+
+def _longest_prefix(
+    word: str,
+    available_px: float,
+    font_size: int | None,
+    font_family: str | None,
+) -> int:
+    """
+    How much of ``word`` fits on one line, at least one character.
+
+    Examples:
+        >>> _longest_prefix("xxxxxxxx", 0, None, None)
+        1
+    """
+    low, high = 1, len(word)
+    while low < high:
+        mid = (low + high + 1) // 2
+        if _fits(word[:mid], available_px, font_size, font_family):
+            low = mid
+        else:
+            high = mid - 1
+    return low
+
+
+def _count_paragraph_lines(
+    paragraph: str,
+    available_px: float,
+    font_size: int | None,
+    font_family: str | None,
+) -> int:
+    """Lines one run of text without newlines takes, wrapped Excel's way."""
+    lines = 1
+    current = ""
+    for word in paragraph.split(" "):
+        candidate = f"{current} {word}" if current else word
+        if _fits(candidate, available_px, font_size, font_family):
+            current = candidate
+            continue
+        if current:
+            lines += 1
+            current = ""
+        if _fits(word, available_px, font_size, font_family):
+            current = word
+            continue
+        # Wider than a whole line on its own: Excel breaks it mid-word
+        rest = word
+        while not _fits(rest, available_px, font_size, font_family):
+            taken = _longest_prefix(rest, available_px, font_size, font_family)
+            rest = rest[taken:]
+            lines += 1
+        current = rest
+    return lines
+
+
 def count_lines(
     text: str,
     available_px: float,
@@ -193,7 +251,8 @@ def count_lines(
 
     Mirrors how Excel wraps: explicit newlines always break, words break on
     spaces, and a word only breaks mid-word when it is wider than the whole
-    line on its own.
+    line on its own. Each candidate line is measured whole, since a line is
+    narrower than its characters measured one by one.
 
     Examples:
         >>> count_lines("a b", 1000)
@@ -206,32 +265,10 @@ def count_lines(
     text = str(text)
     if available_px <= 0:
         return 1
-    cur_font_size = font_size or DEFAULT_FONT_SIZE
-    cur_font_family = font_family or DEFAULT_FONT_FAMILY
-    space_px = get_char_size(" ", cur_font_size, cur_font_family)
-    lines = 0
-    for paragraph in text.split("\n"):
-        lines += 1
-        used = 0.0
-        for idx, word in enumerate(paragraph.split(" ")):
-            gap = space_px if idx else 0.0
-            word_px = get_text_px(word, font_size, font_family)
-            if used and used + gap + word_px > available_px + FIT_TOLERANCE_PX:
-                lines += 1
-                used = 0.0
-                gap = 0.0
-            if word_px <= available_px + FIT_TOLERANCE_PX:
-                used += gap + word_px
-                continue
-            # Wider than a whole line: Excel breaks it character by character
-            used += gap
-            for char in word:
-                char_px = get_char_size(char, cur_font_size, cur_font_family)
-                if used and used + char_px > available_px + FIT_TOLERANCE_PX:
-                    lines += 1
-                    used = 0.0
-                used += char_px
-    return lines
+    return sum(
+        _count_paragraph_lines(paragraph, available_px, font_size, font_family)
+        for paragraph in text.split("\n")
+    )
 
 
 def get_row_height(lines: int, font_size: int | None) -> float:
