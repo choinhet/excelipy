@@ -24,6 +24,12 @@ DEFAULT_FONT_FAMILY = "Calibri"
 TUNING_DEFAULT = 5
 PADDING_DEFAULT = 2
 
+# Excel sizes columns in units of the font's widest digit and keeps 5 pixels of
+# every cell for padding and the gridline. 7px is that digit at the default
+# 11pt Calibri, which turns the 5px into the fraction of a digit it is worth.
+EXCEL_PADDING_PX = 5
+EXCEL_DIGIT_PX = 7
+
 ROW_WISE_ARG = "_excelipy_row_wise"
 COL_CACHE_NAME = "_excelipy_col_sizes"
 ROW_CACHE_NAME = "_excelipy_row_heights"
@@ -116,20 +122,38 @@ def get_text_size(
     return _px_to_excel(get_text_px(text, font_size, font_family))
 
 
-def _excel_to_px(size: float) -> float:
+def _excel_to_px(
+    size: float,
+    font_size: int | None = None,
+    font_family: str | None = None,
+) -> float:
     """
     How many pixels of text a column (or merged span) of ``size`` fits.
 
-    Inverse of :func:`_px_to_excel`. That conversion floors, so a column sized
-    for its own widest cell is up to ``TUNING_DEFAULT`` pixels narrower than the
-    text it was measured from. Handing that slack back keeps such a cell on a
-    single line instead of wrapping it on a rounding error.
+    A column's unit is the width of the digit zero in its font, of which Excel
+    keeps ``EXCEL_PADDING_PX`` for padding and the gridline - that is Excel's
+    own width formula, measured here in the same metrics the text is. Going
+    through :data:`TUNING_DEFAULT` instead would understate a column by about a
+    fifth, which is what wraps a clamped column's text that Excel draws on one
+    line.
+
+    The floor is :func:`_px_to_excel` read backwards, so a column is never
+    considered too narrow for the very text it was sized from.
 
     Examples:
         >>> _excel_to_px(_px_to_excel(83.0)) >= 83.0
         True
+        >>> _excel_to_px(20) > 20 * get_char_size("0", 11, "Calibri") * 0.9
+        True
     """
-    return max(size - PADDING_DEFAULT + 1, 0) * TUNING_DEFAULT
+    digit_px = get_char_size(
+        "0",
+        font_size or DEFAULT_FONT_SIZE,
+        font_family or DEFAULT_FONT_FAMILY,
+    )
+    excel_px = (size - EXCEL_PADDING_PX / EXCEL_DIGIT_PX) * digit_px
+    tuned_px = (size - PADDING_DEFAULT + 1) * TUNING_DEFAULT
+    return max(excel_px, tuned_px, 0)
 
 
 def count_lines(
@@ -317,7 +341,7 @@ def _fit_row(
         return
     lines = count_lines(
         measure.text,
-        _excel_to_px(available_size),
+        _excel_to_px(available_size, measure.font_size, measure.font_family),
         measure.font_size,
         measure.font_family,
     )

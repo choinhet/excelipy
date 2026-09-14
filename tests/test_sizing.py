@@ -1,3 +1,4 @@
+import math
 import random
 import string
 
@@ -10,6 +11,7 @@ from excelipy.writers.table import (
     _excel_to_px,
     count_lines,
     get_row_height,
+    get_text_px,
     get_text_size,
     write_table,
 )
@@ -80,6 +82,25 @@ def test_auto_sized_column_never_wraps_its_own_text():
         assert count_lines(text, _excel_to_px(get_text_size(text))) == 1
 
 
+def test_column_wider_than_the_tuned_estimate_stays_on_one_line():
+    """
+    A column's real capacity is its width in digits, not its width in tuning
+    units, so text measuring wider than the column can still fit on one line.
+    """
+    text = "some short text"
+    width = 14
+    assert get_text_size(text) > width
+    assert count_lines(text, _excel_to_px(width)) == 1
+    _, heights = write(
+        ep.Table(
+            data=pd.DataFrame({"col": [text]}),
+            wrap_header=True,
+            column_width={"col": width},
+        )
+    )
+    assert heights == {}
+
+
 def test_cells_that_cannot_wrap_do_not_grow_rows():
     long_text = "a very long piece of text that overflows its column by a lot"
     _, heights = write(
@@ -127,7 +148,8 @@ def test_count_lines_wraps_on_words_and_newlines():
     assert count_lines("hello world hello world", width) == 2
     assert count_lines("hello\nworld", width) == 2
     # A single word wider than the line is broken mid-word, as Excel does
-    assert count_lines("x" * 200, _excel_to_px(get_text_size("x" * 20))) >= 10
+    narrow = _excel_to_px(get_text_size("x" * 20))
+    assert count_lines("x" * 200, narrow) == math.ceil(get_text_px("x" * 200) / narrow)
 
 
 def test_dates_and_missing_values_are_measured_as_shown():
