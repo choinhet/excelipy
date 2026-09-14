@@ -15,12 +15,20 @@ from excelipy.writers.table import (
     PADDING_DEFAULT,
     _break_chunks,
     _excel_to_px,
+    _load_font,
+    _px_to_excel,
     count_lines,
     get_row_height,
     get_text_px,
     get_text_size,
     write_table,
 )
+
+
+def _installed(family: str) -> bool:
+    """Whether this font resolves to a real file rather than a stand-in."""
+    path = getattr(_load_font(family, DEFAULT_FONT_SIZE), "path", None)
+    return isinstance(path, str)
 
 
 def lines(heights: dict[int, float], row: int, font_size: int | None = None) -> int:
@@ -171,6 +179,33 @@ def test_hyphenated_token_breaks_after_its_dashes():
 
     assert count_lines(token, room) == packed
     assert packed > math.ceil(get_text_px(token) / room)
+
+
+def test_text_is_measured_in_the_cell_font_not_the_default_one():
+    """
+    A column is a fixed width in pixels, set by the workbook's default font.
+    Text in a wider font therefore wraps in a column the default font fits.
+    """
+    if not (_installed("Arial") and _installed("Calibri")):
+        pytest.skip("needs both fonts installed to mean anything")
+    text = "wrapping depends on the font"
+
+    # Exactly the room Calibri needs, with none of auto width's breathing room
+    width = _px_to_excel(get_text_px(text, None, "Calibri")) - PADDING_DEFAULT
+
+    def rows_in(family: str) -> int:
+        _, heights = write(
+            ep.Table(
+                data=pd.DataFrame({"col": [text]}),
+                wrap_header=True,
+                column_width={"col": width},
+                style=ep.Style(font_family=family),
+            )
+        )
+        return lines(heights, 1)
+
+    assert rows_in("Calibri") == 1
+    assert rows_in("Arial") > 1
 
 
 def test_cells_that_cannot_wrap_do_not_grow_rows():

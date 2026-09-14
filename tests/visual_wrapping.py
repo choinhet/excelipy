@@ -51,7 +51,12 @@ def measure(
     return widths, heights
 
 
-def metrics(frame: pd.DataFrame, width: int, font_sizes: dict[int, int]) -> str:
+def metrics(
+    frame: pd.DataFrame,
+    width: int,
+    font_sizes: dict[int, int],
+    font_family: str | None = None,
+) -> str:
     """
     The numbers behind the decision, for the first column of the table.
 
@@ -61,12 +66,13 @@ def metrics(frame: pd.DataFrame, width: int, font_sizes: dict[int, int]) -> str:
     """
     capacity = _excel_to_px(width)
     shown = [
-        f"{get_text_px(_display_text(value, ep.Style()), font_sizes.get(idx)):.0f}"
+        f"{get_text_px(_display_text(value, ep.Style()), font_sizes.get(idx), font_family):.0f}"
         for idx, value in enumerate(frame.iloc[:, 0])
     ]
+    named = f" in {font_family}" if font_family else ""
     return (
         f"[{width} units = {capacity:.0f}px of room; "
-        f"text measures {', '.join(shown)}px]"
+        f"text{named} measures {', '.join(shown)}px]"
     )
 
 
@@ -91,10 +97,12 @@ def case(
     data: dict[str, list] | pd.DataFrame,
     style: ep.Style | None = None,
     font_sizes: dict[int, int] | None = None,
+    font_family: str | None = None,
     **table_args,
 ) -> Case:
     """One case: a note on what to look for, then the table it describes."""
     sheet_style = style or ep.Style(valign="vcenter")
+    table_style = ep.Style(font_family=font_family) if font_family else ep.Style()
     frame = data if isinstance(data, pd.DataFrame) else pd.DataFrame(data)
     rows = len(frame)
     font_sizes = font_sizes or {}
@@ -103,7 +111,13 @@ def case(
     with_expect = frame.copy()
     with_expect["excelipy says"] = [PLACEHOLDER] * rows
     widths, heights = measure(
-        ep.Table(data=with_expect, row_style=row_style, **table_args), sheet_style
+        ep.Table(
+            data=with_expect,
+            row_style=row_style,
+            style=table_style,
+            **table_args,
+        ),
+        sheet_style,
     )
     with_expect["excelipy says"] = [
         expected(heights.get(idx + 1), font_sizes.get(idx)) for idx in range(rows)
@@ -112,13 +126,16 @@ def case(
         name=name,
         components=[
             ep.Text(
-                text=f"{look_for}  {metrics(frame, widths.get(0, 0), font_sizes)}",
+                text=(
+                    f"{look_for}  "
+                    f"{metrics(frame, widths.get(0, 0), font_sizes, font_family)}"
+                ),
                 style=ep.Style(bold=True),
             ),
             ep.Table(
                 data=with_expect,
                 row_style=row_style,
-                style=ep.Style(padding_top=1),
+                style=table_style.merge(ep.Style(padding_top=1)),
                 **table_args,
             ),
         ],
@@ -133,6 +150,7 @@ SHORT = "a short value"
 LONG = "a sentence long enough that no sensible column can hold it on one line"
 LONGER = " ".join([LONG, "and then it keeps going for a good while after that"])
 WORD = "one-unbroken-token-far-too-long-for-any-of-these-columns-to-hold-it"
+FONT_SENSITIVE = "wrapping depends on the font"
 
 
 def merged_header_frame() -> pd.DataFrame:
@@ -256,6 +274,29 @@ def build() -> list[Case]:
             "15 wrapping turned off",
             "One line each, overflowing the column: nothing here wraps, so no row grows.",
             {"text": [LONG, LONGER]},
+            max_col_size=20,
+        ),
+        case(
+            "16 arial body",
+            "Arial is wider than Calibri, so this wraps where Calibri would not.",
+            {"text": [FONT_SENSITIVE, LONG, "tiny"]},
+            font_family="Arial",
+            wrap_header=True,
+            column_width={"text": 25},
+        ),
+        case(
+            "17 arial clamped",
+            "Arial in a clamped column: a line more than the same text in Calibri.",
+            {"text": [LONG, LONGER]},
+            font_family="Arial",
+            wrap_header=True,
+            max_col_size=20,
+        ),
+        case(
+            "18 calibri for comparison",
+            "The same text and widths as sheet 17, in Calibri: a line less.",
+            {"text": [LONG, LONGER]},
+            wrap_header=True,
             max_col_size=20,
         ),
     ]
