@@ -167,6 +167,7 @@ cython_debug/
 
 output.html
 filename.xlsx
+output.xlsx
 uv.lock
 temp/
 
