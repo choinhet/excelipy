@@ -175,9 +175,9 @@ def _px_to_excel(px: float) -> int:
     return math.ceil((px + EXCEL_PADDING_PX) / _max_digit_px()) + PADDING_DEFAULT
 
 
-def _measure_px(text: str, font_size: int, font_family: str) -> float:
-    """One line of text, in pixels at the font's real size."""
-    return _load_font(font_family, font_size).getlength(text) / MEASURE_SCALE
+def _raw_px(text: str, font_size: int, font_family: str) -> float:
+    """Width of ``text`` as laid out at :data:`MEASURE_SCALE` times its size."""
+    return _load_font(font_family, font_size).getlength(text)
 
 
 @lru_cache
@@ -186,10 +186,61 @@ def get_char_size(
     font_size: int,
     font_family: str,
 ) -> int | float:
-    return _measure_px(char, font_size, font_family)
+    return _raw_px(char, font_size, font_family) / MEASURE_SCALE
 
 
 @lru_cache(maxsize=1 << 16)
+def _kern_px(pair: str, font_size: int, font_family: str) -> float:
+    """
+    What laying out two characters together takes off their two advances.
+
+    A line is exactly its characters' advances plus the kerning between each
+    neighbouring pair, so caching the pairs - of which text uses few - measures
+    a line exactly without laying one out, which costs several times as much.
+    """
+    joined = _raw_px(pair, font_size, font_family)
+    apart = _raw_px(pair[0], font_size, font_family) + _raw_px(
+        pair[1], font_size, font_family
+    )
+    return (joined - apart) / MEASURE_SCALE
+
+
+@lru_cache(maxsize=1 << 16)
+def _line_px(line: str, font_size: int, font_family: str) -> float:
+    """
+    Width of one line with no breaks in it.
+
+    Cached because the same text is measured over and over: the words wrapping
+    walks through, and the repeated values a column of a table tends to hold.
+    """
+    total = 0.0
+    previous = ""
+    for char in line:
+        total += get_char_size(char, font_size, font_family)
+        if previous:
+            total += _kern_px(previous + char, font_size, font_family)
+        previous = char
+    return total
+
+
+def _append_px(
+    tail: str,
+    addition: str,
+    font_size: int,
+    font_family: str,
+) -> float:
+    """
+    What ``addition`` adds to a line ending in ``tail``.
+
+    Adding a piece at a time and keeping the running width is what makes
+    wrapping cost one pass over the text rather than one over every line.
+    """
+    if not addition:
+        return 0.0
+    kerned = _kern_px(tail[-1] + addition[0], font_size, font_family) if tail else 0.0
+    return kerned + _line_px(addition, font_size, font_family)
+
+
 def get_text_px(
     text: str,
     font_size: int | None = None,
@@ -198,11 +249,10 @@ def get_text_px(
     """
     Width of the widest line of ``text``, in pixels.
 
-    Measured a line at a time rather than a character at a time: a sum of
-    single characters loses the kerning between them and rounds every advance
-    on its own, which reads a few pixels wide over a line of text - enough to
-    wrap a line that fits. Laying out a whole line costs more than adding up
-    cached characters, so the results are cached too.
+    A line is its characters' advances plus the kerning between neighbouring
+    pairs, both cached: dropping the kerning reads several pixels over a line
+    of text - enough to wrap one that fits - and laying the line out instead
+    costs several times as much for the same answer.
 
     Examples:
         >>> get_text_px("wide line\\nshort") == get_text_px("wide line")
@@ -212,7 +262,7 @@ def get_text_px(
     """
     family = font_family or DEFAULT_FONT_FAMILY
     size = font_size or DEFAULT_FONT_SIZE
-    return max(_measure_px(line, size, family) for line in str(text).split("\n"))
+    return max(_line_px(line, size, family) for line in str(text).split("\n"))
 
 
 def get_text_size(
@@ -271,63 +321,68 @@ def _break_chunks(word: str) -> list[str]:
     return chunks or [""]
 
 
-def _fits(text: str, available_px: float, size: int | None, family: str | None) -> bool:
-    """Whether ``text`` is drawn within ``available_px``, to the nearest pixel."""
-    return get_text_px(text, size, family) <= available_px + FIT_TOLERANCE_PX
-
-
 def _longest_prefix(
     word: str,
     available_px: float,
-    font_size: int | None,
-    font_family: str | None,
+    font_size: int,
+    font_family: str,
 ) -> int:
     """
-    How much of ``word`` fits on one line, at least one character.
+    How much of ``word`` fits on an empty line, at least one character.
 
     Examples:
-        >>> _longest_prefix("xxxxxxxx", 0, None, None)
+        >>> _longest_prefix("xxxxxxxx", 0, 11, "Calibri")
         1
+        >>> _longest_prefix("fits", 10_000, 11, "Calibri")
+        4
     """
-    low, high = 1, len(word)
-    while low < high:
-        mid = (low + high + 1) // 2
-        if _fits(word[:mid], available_px, font_size, font_family):
-            low = mid
-        else:
-            high = mid - 1
-    return low
+    used = 0.0
+    tail = ""
+    for taken, char in enumerate(word):
+        used += _append_px(tail, char, font_size, font_family)
+        if taken and used > available_px + FIT_TOLERANCE_PX:
+            return taken
+        tail = char
+    return max(len(word), 1)
 
 
 def _count_paragraph_lines(
     paragraph: str,
     available_px: float,
-    font_size: int | None,
-    font_family: str | None,
+    font_size: int,
+    font_family: str,
 ) -> int:
     """Lines one run of text without newlines takes, wrapped Excel's way."""
     lines = 1
-    current = ""
+    used = 0.0
+    tail = ""
     for word in paragraph.split(" "):
         for idx, chunk in enumerate(_break_chunks(word)):
             # A word starts after a space; a chunk of one carries straight on
-            gap = " " if current and idx == 0 else ""
-            if _fits(current + gap + chunk, available_px, font_size, font_family):
-                current += gap + chunk
+            piece = f" {chunk}" if used and idx == 0 else chunk
+            width = _append_px(tail, piece, font_size, font_family)
+            if used + width <= available_px + FIT_TOLERANCE_PX:
+                used += width
+                tail = piece[-1:] or tail
                 continue
-            if current:
+            if used:
                 lines += 1
-                current = ""
-            if _fits(chunk, available_px, font_size, font_family):
-                current = chunk
+                used, tail = 0.0, ""
+                width = _line_px(chunk, font_size, font_family)
+            if width <= available_px + FIT_TOLERANCE_PX:
+                used, tail = width, chunk[-1:]
                 continue
             # Wider than a whole line on its own: Excel breaks it mid-chunk
             rest = chunk
-            while not _fits(rest, available_px, font_size, font_family):
-                taken = _longest_prefix(rest, available_px, font_size, font_family)
-                rest = rest[taken:]
+            while True:
+                width = _line_px(rest, font_size, font_family)
+                if width <= available_px + FIT_TOLERANCE_PX:
+                    break
+                rest = rest[
+                    _longest_prefix(rest, available_px, font_size, font_family) :
+                ]
                 lines += 1
-            current = rest
+            used, tail = width, rest[-1:]
     return lines
 
 
@@ -356,8 +411,10 @@ def count_lines(
     text = str(text)
     if available_px <= 0:
         return 1
+    family = font_family or DEFAULT_FONT_FAMILY
+    size = font_size or DEFAULT_FONT_SIZE
     return sum(
-        _count_paragraph_lines(paragraph, available_px, font_size, font_family)
+        _count_paragraph_lines(paragraph, available_px, size, family)
         for paragraph in text.split("\n")
     )
 

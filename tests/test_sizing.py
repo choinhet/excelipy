@@ -16,6 +16,7 @@ from excelipy.writers.table import (
     _break_chunks,
     _excel_to_px,
     _font_candidates,
+    _line_px,
     _load_font,
     _max_digit_px,
     _px_to_excel,
@@ -176,6 +177,25 @@ def test_the_column_unit_is_the_width_excel_draws_a_digit():
     assert _max_digit_px() == 7
     # Excel's own conversion, for a column of 20 units
     assert _excel_to_px(20) == 135
+
+
+def test_wrapping_a_cell_costs_one_pass_over_its_text():
+    """
+    Wrapping keeps a running width instead of measuring each candidate line, so
+    twice the text costs twice the measuring, not four times. Counted in calls
+    rather than seconds, which a loaded machine would make meaningless.
+    """
+    room = _excel_to_px(20)
+    words = "alpha beta gamma delta epsilon campaign video segment loop message"
+
+    def measurements(repeats: int) -> int:
+        _line_px.cache_clear()
+        count_lines(" ".join([words] * repeats), room)
+        info = _line_px.cache_info()
+        return info.hits + info.misses
+
+    one, eight = measurements(1), measurements(8)
+    assert eight < one * 8 * 2, f"{one} -> {eight} for eight times the text"
 
 
 def test_hyphenated_token_breaks_after_its_dashes():
