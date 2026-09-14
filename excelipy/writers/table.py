@@ -25,7 +25,8 @@ PADDING_DEFAULT = 2
 
 # Excel draws at 96 dpi, where a point is 96/72 of a pixel. Pillow sizes a font
 # in pixels, so a font asked for at its point size comes out a quarter too
-# small and every string measures short.
+# small and every string measures short. The size is left fractional: rounding
+# 11pt up to a 15px em reads every string 2% wide.
 PX_PER_POINT = 96 / 72
 
 # Excel sizes columns in units of the font's widest digit and keeps 5 pixels of
@@ -33,6 +34,10 @@ PX_PER_POINT = 96 / 72
 # header that carries one.
 EXCEL_PADDING_PX = 5
 FILTER_BUTTON_PX = 16
+
+# Excel lays text out on whole pixels, so a line that overruns by less than one
+# is drawn, not wrapped.
+FIT_TOLERANCE_PX = 1.0
 
 ROW_WISE_ARG = "_excelipy_row_wise"
 COL_CACHE_NAME = "_excelipy_col_sizes"
@@ -78,7 +83,7 @@ def _load_font(
     font_family: str,
     font_size: int,
 ) -> ImageFont.ImageFont | ImageFont.FreeTypeFont:
-    size_px = round(font_size * PX_PER_POINT)
+    size_px = font_size * PX_PER_POINT
     for candidate in _font_candidates(font_family):
         try:
             return ImageFont.truetype(candidate, size_px)
@@ -97,8 +102,10 @@ def _max_digit_px() -> float:
     """
     Width of the digit zero in the workbook's default font.
 
-    This is the unit Excel measures columns in, so it is taken from the default
-    font whatever font a cell itself uses.
+    This is the unit Excel measures columns in, so it comes from the default
+    font whatever font a cell itself uses. It is kept fractional: rounding the
+    unit down takes a pixel off every column of a wide table, which is enough
+    to wrap text Excel has room for.
     """
     return get_char_size("0", DEFAULT_FONT_SIZE, DEFAULT_FONT_FAMILY)
 
@@ -120,6 +127,7 @@ def get_char_size(
     return _load_font(font_family, font_size).getlength(char)
 
 
+@lru_cache(maxsize=1 << 16)
 def get_text_px(
     text: str,
     font_size: int | None = None,
@@ -128,19 +136,23 @@ def get_text_px(
     """
     Width of the widest line of ``text``, in pixels.
 
+    Measured a line at a time rather than a character at a time: a sum of
+    single characters loses the kerning between them and rounds every advance
+    on its own, which reads a few pixels wide over a line of text - enough to
+    wrap a line that fits. Laying out a whole line costs more than adding up
+    cached characters, so the results are cached too.
+
     Examples:
         >>> get_text_px("wide line\\nshort") == get_text_px("wide line")
         True
+        >>> get_text_px("")
+        0.0
     """
-    cur_font_size = font_size or DEFAULT_FONT_SIZE
-    cur_font_family = font_family or DEFAULT_FONT_FAMILY
-    widest = 0.0
-    for line in str(text).split("\n"):
-        total_size = 0.0
-        for char in line:
-            total_size += get_char_size(char, cur_font_size, cur_font_family)
-        widest = max(widest, total_size)
-    return widest
+    font = _load_font(
+        font_family or DEFAULT_FONT_FAMILY,
+        font_size or DEFAULT_FONT_SIZE,
+    )
+    return max(font.getlength(line) for line in str(text).split("\n"))
 
 
 def get_text_size(
@@ -204,18 +216,18 @@ def count_lines(
         for idx, word in enumerate(paragraph.split(" ")):
             gap = space_px if idx else 0.0
             word_px = get_text_px(word, font_size, font_family)
-            if used and used + gap + word_px > available_px:
+            if used and used + gap + word_px > available_px + FIT_TOLERANCE_PX:
                 lines += 1
                 used = 0.0
                 gap = 0.0
-            if word_px <= available_px:
+            if word_px <= available_px + FIT_TOLERANCE_PX:
                 used += gap + word_px
                 continue
             # Wider than a whole line: Excel breaks it character by character
             used += gap
             for char in word:
                 char_px = get_char_size(char, cur_font_size, cur_font_family)
-                if used and used + char_px > available_px:
+                if used and used + char_px > available_px + FIT_TOLERANCE_PX:
                     lines += 1
                     used = 0.0
                 used += char_px
