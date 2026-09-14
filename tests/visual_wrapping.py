@@ -12,6 +12,7 @@ open the file in Excel and check the two things a row height can get wrong:
 A row marked "1 line" must show one line of text in a row of default height.
 """
 
+import io
 import sys
 from pathlib import Path
 from typing import NamedTuple
@@ -33,7 +34,7 @@ PLACEHOLDER = "? lines"
 
 def measure(table: ep.Table, style: ep.Style) -> dict[int, float]:
     """Row heights excelipy would set for this table, without writing a file."""
-    workbook = xlsxwriter.Workbook("/dev/null")
+    workbook = xlsxwriter.Workbook(io.BytesIO())
     worksheet = workbook.add_worksheet()
     write_table(workbook, worksheet, table, style)
     heights = dict(getattr(worksheet, ROW_CACHE_NAME, {}))

@@ -1,3 +1,4 @@
+import io
 import math
 import random
 import string
@@ -19,7 +20,7 @@ from excelipy.writers.table import (
 
 def write(table: ep.Table, style: ep.Style | None = None) -> tuple[dict, dict]:
     """Write a table to a throwaway workbook, returning its column widths and row heights."""
-    workbook = xlsxwriter.Workbook("/dev/null")
+    workbook = xlsxwriter.Workbook(io.BytesIO())
     worksheet = workbook.add_worksheet()
     heights: dict[int, float] = {}
     original = worksheet.set_row
@@ -154,7 +155,7 @@ def test_cells_that_cannot_wrap_do_not_grow_rows():
 
 def test_row_heights_only_grow():
     """A second table sharing a row cannot shrink a height the first one needed."""
-    workbook = xlsxwriter.Workbook("/dev/null")
+    workbook = xlsxwriter.Workbook(io.BytesIO())
     worksheet = workbook.add_worksheet()
     heights: dict[int, float] = {}
     original = worksheet.set_row
