@@ -101,6 +101,45 @@ def test_column_wider_than_the_tuned_estimate_stays_on_one_line():
     assert heights == {}
 
 
+def test_embedded_newlines_grow_the_row_even_when_the_text_fits():
+    """A cell that fits across is still two lines tall if it carries a break."""
+    _, heights = write(
+        ep.Table(
+            data=pd.DataFrame({"col": ["first\nsecond"]}),
+            wrap_header=True,
+            max_col_size=40,
+        )
+    )
+    assert heights[1] == pytest.approx(get_row_height(2, None))
+
+
+def test_multiline_text_is_sized_by_its_widest_line():
+    widths, _ = write(
+        ep.Table(
+            data=pd.DataFrame({"col": ["a much wider first line\nshort"]}),
+            wrap_header=True,
+        )
+    )
+    assert widths[0] == get_text_size("a much wider first line")
+
+
+def test_bigger_fonts_need_more_lines_in_the_same_column():
+    """A column is a fixed width, so a larger font fits less of it per line."""
+    text = "a sentence long enough that no sensible column can hold it on one line"
+    per_size = {}
+    for size in (8, 11, 18):
+        _, heights = write(
+            ep.Table(
+                data=pd.DataFrame({"col": [text]}),
+                wrap_header=True,
+                max_col_size=30,
+                body_style=ep.Style(font_size=size),
+            )
+        )
+        per_size[size] = round(heights[1] / (size * 1.4))
+    assert per_size[8] < per_size[11] < per_size[18]
+
+
 def test_cells_that_cannot_wrap_do_not_grow_rows():
     long_text = "a very long piece of text that overflows its column by a lot"
     _, heights = write(

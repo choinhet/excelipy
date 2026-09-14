@@ -106,12 +106,22 @@ def get_text_px(
     font_size: int | None = None,
     font_family: str | None = None,
 ) -> float:
+    """
+    Width of the widest line of ``text``, in pixels.
+
+    Examples:
+        >>> get_text_px("wide line\\nshort") == get_text_px("wide line")
+        True
+    """
     cur_font_size = font_size or DEFAULT_FONT_SIZE
     cur_font_family = font_family or DEFAULT_FONT_FAMILY
-    total_size = 0.0
-    for char in str(text):
-        total_size += get_char_size(char, cur_font_size, cur_font_family)
-    return total_size
+    widest = 0.0
+    for line in str(text).split("\n"):
+        total_size = 0.0
+        for char in line:
+            total_size += get_char_size(char, cur_font_size, cur_font_family)
+        widest = max(widest, total_size)
+    return widest
 
 
 def get_text_size(
@@ -122,20 +132,20 @@ def get_text_size(
     return _px_to_excel(get_text_px(text, font_size, font_family))
 
 
-def _excel_to_px(
-    size: float,
-    font_size: int | None = None,
-    font_family: str | None = None,
-) -> float:
+def _excel_to_px(size: float) -> float:
     """
     How many pixels of text a column (or merged span) of ``size`` fits.
 
-    A column's unit is the width of the digit zero in its font, of which Excel
-    keeps ``EXCEL_PADDING_PX`` for padding and the gridline - that is Excel's
-    own width formula, measured here in the same metrics the text is. Going
-    through :data:`TUNING_DEFAULT` instead would understate a column by about a
-    fifth, which is what wraps a clamped column's text that Excel draws on one
-    line.
+    A column's unit is the width of the digit zero in the workbook's default
+    font - not in the cell's own font - of which Excel keeps
+    ``EXCEL_PADDING_PX`` for padding and the gridline. That is Excel's own
+    width formula. Going through :data:`TUNING_DEFAULT` instead would
+    understate a column by about a fifth, which is what wraps a clamped
+    column's text that Excel draws on one line.
+
+    A column is therefore a fixed width in pixels, and a cell in a larger font
+    fits less of it - which is why the text is measured in its own font while
+    the column is measured in the default one.
 
     The floor is :func:`_px_to_excel` read backwards, so a column is never
     considered too narrow for the very text it was sized from.
@@ -145,12 +155,10 @@ def _excel_to_px(
         True
         >>> _excel_to_px(20) > 20 * get_char_size("0", 11, "Calibri") * 0.9
         True
+        >>> _excel_to_px(20) == _excel_to_px(20)  # not a function of the cell font
+        True
     """
-    digit_px = get_char_size(
-        "0",
-        font_size or DEFAULT_FONT_SIZE,
-        font_family or DEFAULT_FONT_FAMILY,
-    )
+    digit_px = get_char_size("0", DEFAULT_FONT_SIZE, DEFAULT_FONT_FAMILY)
     excel_px = (size - EXCEL_PADDING_PX / EXCEL_DIGIT_PX) * digit_px
     tuned_px = (size - PADDING_DEFAULT + 1) * TUNING_DEFAULT
     return max(excel_px, tuned_px, 0)
@@ -336,12 +344,15 @@ def _fit_row(
     (or a narrower column further along the row) cannot shrink a row another
     cell already needs.
     """
-    if not measure.wraps or measure.size <= available_size:
-        # Fits on one line, or cannot wrap at all
+    if not measure.wraps:
+        # Nothing to grow for: the cell is drawn on one line whatever it holds
+        return
+    if "\n" not in measure.text and measure.size <= available_size:
+        # Fits on one line, and has no break of its own to honour
         return
     lines = count_lines(
         measure.text,
-        _excel_to_px(available_size, measure.font_size, measure.font_family),
+        _excel_to_px(available_size),
         measure.font_size,
         measure.font_family,
     )
