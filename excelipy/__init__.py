@@ -11,6 +11,9 @@ __all__ = [
     "Excel",
     "save",
     "row_wise",
+    "font_path",
+    "font_measurement",
+    "clear_font_caches",
     "unnest_components",
     "AI_GUIDE",
 ]
@@ -29,4 +32,9 @@ from excelipy.models import (
     Text,
 )
 from excelipy.service import save, unnest_components
-from excelipy.writers.table import row_wise
+from excelipy.writers.table import (
+    clear_font_caches,
+    font_measurement,
+    font_path,
+    row_wise,
+)

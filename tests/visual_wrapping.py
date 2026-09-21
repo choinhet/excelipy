@@ -29,7 +29,6 @@ from excelipy.writers.table import (
     ROW_CACHE_NAME,
     _display_text,
     _excel_to_px,
-    _load_font,
     _max_digit_px,
     get_text_px,
     write_table,
@@ -336,8 +335,12 @@ def build() -> list[Case]:
 def main(out: Path) -> None:
     cases = build()
     ep.save(ep.Excel(path=out, sheets=[c.sheet for c in cases]))
-    path = getattr(_load_font(DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE), "path", None)
-    using = path if isinstance(path, str) else f"a stand-in for {DEFAULT_FONT_FAMILY}"
+    how = ep.font_measurement(DEFAULT_FONT_FAMILY)
+    using = {
+        "installed": ep.font_path(DEFAULT_FONT_FAMILY),
+        "carried": f"the widths carried for {DEFAULT_FONT_FAMILY}",
+        "stand-in": f"a stand-in for {DEFAULT_FONT_FAMILY}",
+    }[how]
     print(f"wrote {out}")
     exact = get_text_px("0")
     print(

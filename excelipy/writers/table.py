@@ -1,8 +1,15 @@
 import datetime
+import gzip
+import json
 import logging
 import math
+import os
+import shutil
+import subprocess
 from collections import defaultdict
+from collections.abc import Iterator
 from functools import lru_cache
+from importlib.resources import files
 from typing import Any, NamedTuple, cast
 
 import numpy as np
@@ -29,18 +36,43 @@ PADDING_DEFAULT = 2
 # 11pt up to a 15px em reads every string 2% wide.
 PX_PER_POINT = 96 / 72
 
-# Fonts are measured at this multiple of their real size and scaled back down.
-# A hinted font rounds its advances to whole pixels at text sizes, by a
-# different amount on every platform and in every font; measured large, the
-# rounding is a rounding error and what comes back is the advance the glyph was
-# drawn with - which is what Excel lays text out on.
-MEASURE_SCALE = 10
+# Every font is measured at this size, in pixels, and scaled to the size it is
+# asked for. A hinted font rounds its advances to whole pixels at text sizes,
+# by a different amount on every platform and in every font; measured this
+# large, the rounding is a rounding error and what comes back is the advance
+# the glyph was drawn with - which is what Excel lays text out on. It is a
+# fixed size rather than a multiple of the text's, so that every size is
+# measured through the same numbers, and it is the size the carried widths
+# were read at, so a font measured here and a font carried agree exactly.
+MEASURE_PX = 2048
 
 # Excel sizes columns in units of the font's widest digit and keeps 5 pixels of
 # every cell for padding and the gridline, plus room for a filter button in a
 # header that carries one.
 EXCEL_PADDING_PX = 5
 FILTER_BUTTON_PX = 16
+
+# What that digit is worth, in whole pixels, for the fonts a workbook defaults
+# to. The unit belongs to the file rather than to the machine writing it: Excel
+# draws a Calibri 11 digit 7 pixels wide, and 7 is the constant xlsxwriter
+# itself converts every column width through, wherever it runs.
+EXCEL_DIGIT_PX = {("calibri", 11): 7, ("arial", 10): 7}
+
+# Set to reproduce a machine with no fonts of its own - every family falls
+# through to the carried metrics, and then to the stand-in, as it does in a
+# bare container.
+NO_SYSTEM_FONTS_ENV = "EXCELIPY_NO_SYSTEM_FONTS"
+
+# Widths excelipy carries for the fonts it is most often asked for, so a
+# machine with none of them installed still measures them as Excel draws them.
+# Advances and kerning are stored in units of the em - see
+# tools/generate_font_metrics.py, which builds the file.
+METRICS_FILE = "font_metrics.json.gz"
+
+# The carried widths are kept in this fraction of a pixel at the size they were
+# measured at, which is what FreeType rounds an advance to - so storing them
+# loses nothing, and a carried font measures to the bit as an installed one.
+METRICS_SUBPIXEL = 64
 
 # Excel lays text out on whole pixels, so a line that overruns by less than one
 # is drawn, not wrapped.
@@ -91,8 +123,43 @@ FONT_FILE_ALIASES = {
     "trebuchet ms": ("trebuc.ttf",),
 }
 
+# The same, for the bold cut. Windows names it by suffixing the family's own
+# file, which is not a rule anything else follows.
+BOLD_FONT_FILE_ALIASES = {
+    "arial": ("arialbd.ttf", "LiberationSans-Bold.ttf"),
+    "book antiqua": ("bkantb.ttf",),
+    "calibri": ("calibrib.ttf", "Carlito-Bold.ttf"),
+    "cambria": ("cambriab.ttf", "Caladea-Bold.ttf"),
+    "century gothic": ("gothicb.ttf",),
+    "comic sans ms": ("comicbd.ttf",),
+    "consolas": ("consolab.ttf",),
+    "courier new": ("courbd.ttf", "LiberationMono-Bold.ttf"),
+    "garamond": ("garabd.ttf",),
+    "lucida console": ("lucon.ttf",),
+    "palatino linotype": ("palab.ttf",),
+    "segoe ui": ("segoeuib.ttf",),
+    "times new roman": ("timesbd.ttf", "LiberationSerif-Bold.ttf"),
+    "trebuchet ms": ("trebucbd.ttf",),
+}
 
-def _font_candidates(font_family: str) -> tuple[str, ...]:
+# Families that measure the same as one of the Microsoft fonts by design. A
+# Linux box carries these in place of the font itself, and fontconfig answers
+# for the font with one of them - but it answers with something whatever it
+# has, so what it says has to be checked against this.
+METRIC_SUBSTITUTES = {
+    "arial": ("liberation sans", "arimo"),
+    "calibri": ("carlito",),
+    "cambria": ("caladea",),
+    "courier new": ("liberation mono", "cousine"),
+    "georgia": ("gelasio",),
+    "times new roman": ("liberation serif", "tinos"),
+}
+
+# Families already reported as missing, so a sheet of them logs one line each
+_substituted: set[str] = set()
+
+
+def _font_candidates(font_family: str, bold: bool = False) -> tuple[str, ...]:
     """
     File names a font family is likely installed under, best guess first.
 
@@ -101,34 +168,238 @@ def _font_candidates(font_family: str) -> tuple[str, ...]:
         ('verdana.ttf', 'Verdana.ttf')
         >>> "times.ttf" in _font_candidates("Times New Roman")
         True
+        >>> "timesbd.ttf" in _font_candidates("Times New Roman", bold=True)
+        True
+        >>> "Verdana-Bold.ttf" in _font_candidates("Verdana", bold=True)
+        True
     """
     lower = font_family.lower()
     packed = font_family.replace(" ", "")
     names = (lower, lower.replace(" ", ""), font_family, packed)
-    seen = {f"{name}.ttf": None for name in names}
-    for alias in FONT_FILE_ALIASES.get(lower, ()):
+    if bold:
+        aliases = BOLD_FONT_FILE_ALIASES.get(lower, ())
+        seen = {f"{name}{suffix}.ttf": None for name in names for suffix in ("bd", "b")}
+        seen.update({f"{name}-Bold.ttf": None for name in (font_family, packed)})
+    else:
+        aliases = FONT_FILE_ALIASES.get(lower, ())
+        seen = {f"{name}.ttf": None for name in names}
+    for alias in aliases:
         seen[alias] = None
     return tuple(seen)
+
+
+def _system_fonts_disabled() -> bool:
+    """
+    Whether :data:`NO_SYSTEM_FONTS_ENV` asks for the fonts here to be ignored.
+
+    Examples:
+        >>> previous = os.environ.pop(NO_SYSTEM_FONTS_ENV, None)
+        >>> _system_fonts_disabled()
+        False
+        >>> os.environ[NO_SYSTEM_FONTS_ENV] = "1"
+        >>> _system_fonts_disabled()
+        True
+        >>> os.environ[NO_SYSTEM_FONTS_ENV] = previous or ""
+    """
+    return os.environ.get(NO_SYSTEM_FONTS_ENV, "").strip().lower() not in (
+        "",
+        "0",
+        "false",
+        "no",
+    )
+
+
+@lru_cache
+def _fc_match(font_family: str, bold: bool) -> str | None:
+    """
+    The file fontconfig has for ``font_family``, when it really is that font.
+
+    fontconfig knows a font whatever its file is called, and its own rules map
+    a Microsoft font onto the metric-compatible substitute installed in its
+    place. It answers with something regardless, though - a missing Calibri
+    comes back as DejaVu Sans, which measures nothing like it - so the family
+    it matched has to be one we asked for.
+    """
+    if not shutil.which("fc-match"):
+        return None
+    pattern = f"{font_family}:bold" if bold else font_family
+    try:
+        found = subprocess.run(
+            ["fc-match", "--format=%{file}|%{family}", pattern],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        ).stdout
+    except (OSError, subprocess.SubprocessError) as e:  # pragma: no cover
+        log.debug(f"Could not ask fontconfig for {pattern}.\nException: {e}")
+        return None
+    path, _, matched = found.partition("|")
+    wanted = {font_family.lower(), *METRIC_SUBSTITUTES.get(font_family.lower(), ())}
+    families = {name.strip().lower() for name in matched.split(",")}
+    return path if path and families & wanted else None
+
+
+def _font_files(font_family: str, bold: bool) -> Iterator[str]:
+    """
+    Files to try for one cut of ``font_family``, cheapest first.
+
+    The names it is usually installed under cost nothing to try, so fontconfig
+    - a process, and only there on Linux - is asked only once they all miss.
+    """
+    if _system_fonts_disabled():
+        return
+    yield from _font_candidates(font_family, bold)
+    matched = _fc_match(font_family, bold)
+    if matched:
+        yield matched
+
+
+@lru_cache
+def _resolve_font(font_family: str, bold: bool = False) -> str | None:
+    """The file this cut of the family is installed as, or ``None``."""
+    for candidate in _font_files(font_family, bold):
+        try:
+            # Pillow resolves a bare name against the font directories, and
+            # the font it hands back says which file it settled on
+            found = ImageFont.truetype(candidate, DEFAULT_FONT_SIZE).path
+        except Exception as e:
+            log.debug(f"Could not load font file {candidate}.\nException: {e}")
+            continue
+        if isinstance(found, str):
+            return found
+    return None
+
+
+def _report_substituted(font_family: str, bold: bool, carried: bool) -> None:
+    """
+    Say once what a font that is not installed is being measured as.
+
+    Carried metrics are the font's own widths, so that is a note. A stand-in
+    is not: it is a seventh wider than Calibri, so columns come out wider than
+    they need and wrapped text is given lines Excel does not draw. A workbook
+    written on a server is then laid out for a font nobody opening it has, and
+    this line in the log is the only sign of it.
+    """
+    face = f"{font_family} bold" if bold else font_family
+    if face in _substituted:
+        return
+    _substituted.add(face)
+    if carried:
+        log.info(
+            f"Font {face!r} is not installed here; measuring it from the "
+            f"widths excelipy carries for it, which are the widths Excel draws."
+        )
+        return
+    substitutes = METRIC_SUBSTITUTES.get(font_family.lower())
+    instead = f" or {' / '.join(s.title() for s in substitutes)}" if substitutes else ""
+    log.warning(
+        f"Font {face!r} is not installed here and excelipy carries no widths "
+        f"for it, so its text is measured against a stand-in and column widths "
+        f"and row heights will not match what Excel draws. Install "
+        f"{font_family}{instead} where this runs - on Debian or Ubuntu, "
+        f"`apt-get install fonts-crosextra-carlito fonts-crosextra-caladea "
+        f"fonts-liberation`."
+    )
+
+
+def _measuring_file(font_family: str, bold: bool) -> str | None:
+    """
+    The file a cut is actually measured from, which may be the regular one.
+
+    A family installed without its bold cut is still that family: measuring
+    the regular one is a couple of per cent out, where a stand-in for another
+    font is a seventh. It is only ever reached for a family nothing is
+    carried for, since carried widths have a bold cut of their own.
+    """
+    return _resolve_font(font_family, bold) or (
+        _resolve_font(font_family) if bold else None
+    )
 
 
 @lru_cache
 def _load_font(
     font_family: str,
-    font_size: int,
+    bold: bool = False,
 ) -> ImageFont.ImageFont | ImageFont.FreeTypeFont:
-    size_px = font_size * PX_PER_POINT * MEASURE_SCALE
-    for candidate in _font_candidates(font_family):
+    path = _measuring_file(font_family, bold)
+    if path is not None:
         try:
-            return ImageFont.truetype(candidate, size_px)
-        except Exception as e:
-            log.debug(f"Could not load font file {candidate}.\nException: {e}")
-    log.debug(f"Could not load custom font {font_family}, using default.")
+            return ImageFont.truetype(path, MEASURE_PX)
+        except Exception as e:  # pragma: no cover - it opened a moment ago
+            log.debug(f"Could not load font file {path}.\nException: {e}")
+    _report_substituted(font_family, bold, carried=False)
     try:
-        # Sized, so metrics stay proportional to the font: the unsized default
-        # font would measure every size like the default one.
-        return ImageFont.load_default(size=size_px)
+        # The stand-in is sized like any other font, so that scaling what it
+        # measures to the size asked for means the same thing for both.
+        return ImageFont.load_default(size=MEASURE_PX)
     except TypeError:  # pragma: no cover - Pillow < 10.1
         return ImageFont.load_default()
+
+
+class _Carried(NamedTuple):
+    """
+    Widths of a font we do not have, in fractions of a pixel at the size they
+    were measured at - see :data:`METRICS_SUBPIXEL`.
+    """
+
+    advances: dict[str, int]
+    kerning: dict[str, int]
+    unknown: int
+    per_px: float
+
+    def advance(self, char: str) -> int:
+        """What ``char`` takes, or the widest this face has, in stored units."""
+        return self.advances.get(char, self.unknown)
+
+    def kern(self, pair: str) -> int:
+        """What laying ``pair`` out together takes off its two advances."""
+        return self.kerning.get(pair, 0)
+
+    def px(self, units: int, font_size: int) -> float:
+        """Pixels ``units`` come to at ``font_size``."""
+        return units * font_size * PX_PER_POINT / self.per_px
+
+
+@lru_cache(maxsize=1)
+def _carried_faces() -> dict[str, Any]:
+    """Every face excelipy carries widths for, read from disk once."""
+    try:
+        packed = (files("excelipy.resources") / METRICS_FILE).read_bytes()
+        return json.loads(gzip.decompress(packed))
+    except Exception as e:  # pragma: no cover - only a broken install
+        log.warning(f"Could not read the carried font metrics.\nException: {e}")
+        return {"measured_at": MEASURE_PX, "subpixel": METRICS_SUBPIXEL, "faces": {}}
+
+
+@lru_cache
+def _carried(font_family: str, bold: bool) -> _Carried | None:
+    """
+    The widths to measure ``font_family`` by when it is not installed here.
+
+    A font that is installed is measured instead, since that is the font
+    itself. This is for the machine that does not have it: rather than fall
+    through to a stand-in that is a seventh wider than Calibri, the widths
+    Excel draws are carried, and a container lays a sheet out exactly as a
+    workstation does.
+    """
+    if _resolve_font(font_family, bold) is not None:
+        return None
+    carried = _carried_faces()
+    faces = carried["faces"]
+    face = faces.get(font_family.lower(), {}).get("bold" if bold else "regular")
+    if not face:
+        return None
+    advances = face["advances"]
+    _report_substituted(font_family, bold, carried=True)
+    # Anything the face has no width for is charged the widest one it has: too
+    # wide only leaves a column roomy, while too narrow clips what Excel draws
+    return _Carried(
+        advances,
+        face["kerning"],
+        max(advances.values()),
+        carried["measured_at"] * carried["subpixel"],
+    )
 
 
 def _max_digit_px() -> int:
@@ -140,19 +411,93 @@ def _max_digit_px() -> int:
     Excel's column arithmetic is done in pixels of a rendered digit. For the
     Calibri 11 this writes by default, that is the documented 7.
 
-    The fraction is dropped rather than rounded, because that is what a digit
-    renders to: Calibri 11 measures anywhere from 7.4 to 7.9 depending on the
-    font file and the machine, and Excel draws all of them 7 wide. Rounding
-    one of those up to 8 hands every column a seventh more room than it has,
-    and the text Excel wraps into it then fits.
+    It is looked up rather than measured, because it is a property of the file
+    and not of the machine writing it. Excel draws a Calibri 11 digit 7 pixels
+    wide wherever the workbook is opened, and xlsxwriter converts every width
+    it writes through that same 7. Measured instead, it comes out at 7 on a box
+    that has Calibri - which measures 7.4 to 7.9 and truncates - and at 8 on
+    one that does not, where Pillow's stand-in measures 8.5. That is a seventh
+    more room per column than Excel gives, so text Excel wraps is counted as
+    fitting and the row is left a line short of what gets drawn in it: the same
+    report is laid out correctly on a workstation and clipped on a server.
+
+    A default font nobody has a number for is still measured, and truncated for
+    the same reason: Excel draws a digit a whole number of pixels wide.
 
     Examples:
-        >>> _max_digit_px() >= 1
-        True
+        >>> _max_digit_px()
+        7
     """
+    known = EXCEL_DIGIT_PX.get((DEFAULT_FONT_FAMILY.lower(), DEFAULT_FONT_SIZE))
+    if known is not None:
+        return known
     return max(
         math.trunc(get_char_size("0", DEFAULT_FONT_SIZE, DEFAULT_FONT_FAMILY)), 1
     )
+
+
+def font_path(font_family: str, bold: bool = False) -> str | None:
+    """
+    The file a family is measured from, or ``None`` when it is not installed.
+
+    ``None`` does not mean the sizing is wrong: a font excelipy carries the
+    widths of is measured exactly without being installed, and
+    :func:`font_measurement` says which of the two is happening.
+
+    Examples:
+        >>> font_path("No Such Font Is Installed") is None
+        True
+    """
+    return _measuring_file(font_family, bold)
+
+
+def clear_font_caches() -> None:
+    """
+    Forget every font this process has resolved and every width measured from
+    it.
+
+    Measurements are cached hard, since a table measures the same handful of
+    characters over and over. Anything that changes what a font resolves to -
+    installing one, or :data:`NO_SYSTEM_FONTS_ENV` - therefore has to say so.
+
+    Examples:
+        >>> clear_font_caches()
+    """
+    for cache in (
+        _resolve_font,
+        _fc_match,
+        _carried,
+        _load_font,
+        get_char_size,
+        _kern_px,
+        _line_px,
+    ):
+        cache.cache_clear()
+    _substituted.clear()
+
+
+def font_measurement(font_family: str, bold: bool = False) -> str:
+    """
+    How a family is being measured.
+
+    ``installed`` from a file of that family, ``carried`` from the widths
+    excelipy carries for it, or ``stand-in`` from another font altogether.
+    Only the last is a problem, and worth asserting on wherever reports are
+    generated unattended - it is the one that lays a sheet out to the widths
+    of a font nobody opening it has.
+
+    Examples:
+        >>> font_measurement("Calibri") in ("installed", "carried")
+        True
+        >>> font_measurement("No Such Font Is Installed")
+        'stand-in'
+    """
+    if _resolve_font(font_family, bold) is not None:
+        return "installed"
+    if _carried(font_family, bold) is not None:
+        return "carried"
+    # A family installed without its bold cut is measured in the regular one
+    return "installed" if _measuring_file(font_family, bold) else "stand-in"
 
 
 def _column_px(size: float) -> float:
@@ -175,9 +520,14 @@ def _px_to_excel(px: float) -> int:
     return math.ceil((px + EXCEL_PADDING_PX) / _max_digit_px()) + PADDING_DEFAULT
 
 
-def _raw_px(text: str, font_size: int, font_family: str) -> float:
-    """Width of ``text`` as laid out at :data:`MEASURE_SCALE` times its size."""
-    return _load_font(font_family, font_size).getlength(text)
+def _raw_px(text: str, font_family: str, bold: bool) -> float:
+    """Width of ``text`` as laid out at :data:`MEASURE_PX`."""
+    return _load_font(font_family, bold).getlength(text)
+
+
+def _measured_px(raw: float, font_size: int) -> float:
+    """What a width measured at :data:`MEASURE_PX` comes to at ``font_size``."""
+    return raw * font_size * PX_PER_POINT / MEASURE_PX
 
 
 @lru_cache
@@ -185,12 +535,21 @@ def get_char_size(
     char: str,
     font_size: int,
     font_family: str,
+    bold: bool = False,
 ) -> int | float:
-    return _raw_px(char, font_size, font_family) / MEASURE_SCALE
+    carried = _carried(font_family, bold)
+    if carried is not None:
+        return carried.px(carried.advance(char), font_size)
+    return _measured_px(_raw_px(char, font_family, bold), font_size)
 
 
 @lru_cache(maxsize=1 << 16)
-def _kern_px(pair: str, font_size: int, font_family: str) -> float:
+def _kern_px(
+    pair: str,
+    font_size: int,
+    font_family: str,
+    bold: bool = False,
+) -> float:
     """
     What laying out two characters together takes off their two advances.
 
@@ -198,15 +557,21 @@ def _kern_px(pair: str, font_size: int, font_family: str) -> float:
     neighbouring pair, so caching the pairs - of which text uses few - measures
     a line exactly without laying one out, which costs several times as much.
     """
-    joined = _raw_px(pair, font_size, font_family)
-    apart = _raw_px(pair[0], font_size, font_family) + _raw_px(
-        pair[1], font_size, font_family
-    )
-    return (joined - apart) / MEASURE_SCALE
+    carried = _carried(font_family, bold)
+    if carried is not None:
+        return carried.px(carried.kern(pair), font_size)
+    joined = _raw_px(pair, font_family, bold)
+    apart = _raw_px(pair[0], font_family, bold) + _raw_px(pair[1], font_family, bold)
+    return _measured_px(joined - apart, font_size)
 
 
 @lru_cache(maxsize=1 << 16)
-def _line_px(line: str, font_size: int, font_family: str) -> float:
+def _line_px(
+    line: str,
+    font_size: int,
+    font_family: str,
+    bold: bool = False,
+) -> float:
     """
     Width of one line with no breaks in it.
 
@@ -216,9 +581,9 @@ def _line_px(line: str, font_size: int, font_family: str) -> float:
     total = 0.0
     previous = ""
     for char in line:
-        total += get_char_size(char, font_size, font_family)
+        total += get_char_size(char, font_size, font_family, bold)
         if previous:
-            total += _kern_px(previous + char, font_size, font_family)
+            total += _kern_px(previous + char, font_size, font_family, bold)
         previous = char
     return total
 
@@ -228,6 +593,7 @@ def _append_px(
     addition: str,
     font_size: int,
     font_family: str,
+    bold: bool = False,
 ) -> float:
     """
     What ``addition`` adds to a line ending in ``tail``.
@@ -237,14 +603,17 @@ def _append_px(
     """
     if not addition:
         return 0.0
-    kerned = _kern_px(tail[-1] + addition[0], font_size, font_family) if tail else 0.0
-    return kerned + _line_px(addition, font_size, font_family)
+    kerned = (
+        _kern_px(tail[-1] + addition[0], font_size, font_family, bold) if tail else 0.0
+    )
+    return kerned + _line_px(addition, font_size, font_family, bold)
 
 
 def get_text_px(
     text: str,
     font_size: int | None = None,
     font_family: str | None = None,
+    bold: bool = False,
 ) -> float:
     """
     Width of the widest line of ``text``, in pixels.
@@ -262,15 +631,16 @@ def get_text_px(
     """
     family = font_family or DEFAULT_FONT_FAMILY
     size = font_size or DEFAULT_FONT_SIZE
-    return max(_line_px(line, size, family) for line in str(text).split("\n"))
+    return max(_line_px(line, size, family, bold) for line in str(text).split("\n"))
 
 
 def get_text_size(
     text: str,
     font_size: int | None = None,
     font_family: str | None = None,
+    bold: bool = False,
 ) -> int:
-    return _px_to_excel(get_text_px(text, font_size, font_family))
+    return _px_to_excel(get_text_px(text, font_size, font_family, bold))
 
 
 def _excel_to_px(size: float, filtered: bool = False) -> float:
@@ -326,6 +696,7 @@ def _longest_prefix(
     available_px: float,
     font_size: int,
     font_family: str,
+    bold: bool = False,
 ) -> int:
     """
     How much of ``word`` fits on an empty line, at least one character.
@@ -339,7 +710,7 @@ def _longest_prefix(
     used = 0.0
     tail = ""
     for taken, char in enumerate(word):
-        used += _append_px(tail, char, font_size, font_family)
+        used += _append_px(tail, char, font_size, font_family, bold)
         if taken and used > available_px + FIT_TOLERANCE_PX:
             return taken
         tail = char
@@ -351,6 +722,7 @@ def _count_paragraph_lines(
     available_px: float,
     font_size: int,
     font_family: str,
+    bold: bool = False,
 ) -> int:
     """Lines one run of text without newlines takes, wrapped Excel's way."""
     lines = 1
@@ -360,7 +732,7 @@ def _count_paragraph_lines(
         for idx, chunk in enumerate(_break_chunks(word)):
             # A word starts after a space; a chunk of one carries straight on
             piece = f" {chunk}" if used and idx == 0 else chunk
-            width = _append_px(tail, piece, font_size, font_family)
+            width = _append_px(tail, piece, font_size, font_family, bold)
             if used + width <= available_px + FIT_TOLERANCE_PX:
                 used += width
                 tail = piece[-1:] or tail
@@ -368,18 +740,18 @@ def _count_paragraph_lines(
             if used:
                 lines += 1
                 used, tail = 0.0, ""
-                width = _line_px(chunk, font_size, font_family)
+                width = _line_px(chunk, font_size, font_family, bold)
             if width <= available_px + FIT_TOLERANCE_PX:
                 used, tail = width, chunk[-1:]
                 continue
             # Wider than a whole line on its own: Excel breaks it mid-chunk
             rest = chunk
             while True:
-                width = _line_px(rest, font_size, font_family)
+                width = _line_px(rest, font_size, font_family, bold)
                 if width <= available_px + FIT_TOLERANCE_PX:
                     break
                 rest = rest[
-                    _longest_prefix(rest, available_px, font_size, font_family) :
+                    _longest_prefix(rest, available_px, font_size, font_family, bold) :
                 ]
                 lines += 1
             used, tail = width, rest[-1:]
@@ -391,6 +763,7 @@ def count_lines(
     available_px: float,
     font_size: int | None = None,
     font_family: str | None = None,
+    bold: bool = False,
 ) -> int:
     """
     Lines Excel needs to draw ``text`` wrapped inside ``available_px`` pixels.
@@ -414,7 +787,7 @@ def count_lines(
     family = font_family or DEFAULT_FONT_FAMILY
     size = font_size or DEFAULT_FONT_SIZE
     return sum(
-        _count_paragraph_lines(paragraph, available_px, size, family)
+        _count_paragraph_lines(paragraph, available_px, size, family, bold)
         for paragraph in text.split("\n")
     )
 
@@ -532,6 +905,7 @@ class _Measure(NamedTuple):
     font_size: int | None
     font_family: str | None
     wraps: bool
+    bold: bool = False
 
 
 def _fit_row(
@@ -562,6 +936,7 @@ def _fit_row(
             _excel_to_px(available_size, filtered),
             measure.font_size,
             measure.font_family,
+            measure.bold,
         )
     height = get_row_height(lines, measure.font_size)
     heights = getattr(worksheet, ROW_CACHE_NAME, None)
@@ -652,10 +1027,12 @@ def write_table(
                     cur_col,
                     header_style.font_size,
                     header_style.font_family,
+                    bool(header_style.bold),
                 ),
                 font_size=header_style.font_size,
                 font_family=header_style.font_family,
                 wraps=bool(header_style.text_wrap),
+                bold=bool(header_style.bold),
             )
 
     # =============================== Header filters ===============================
@@ -721,6 +1098,7 @@ def write_table(
                     shown,
                     merged_style.font_size,
                     merged_style.font_family,
+                    bool(merged_style.bold),
                 )
                 biggest_body[col_idx] = max(cur_txt_size, biggest_body[col_idx])
                 if merged_style.text_wrap:
@@ -731,6 +1109,7 @@ def write_table(
                         font_size=merged_style.font_size,
                         font_family=merged_style.font_family,
                         wraps=True,
+                        bold=bool(merged_style.bold),
                     )
 
             if url is None:

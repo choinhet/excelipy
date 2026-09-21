@@ -66,6 +66,63 @@ ep.save(
 )
 ```
 
+### Fonts
+
+Auto-size works by measuring text, so it needs the metrics of the font a sheet
+is written in - and a container normally has neither Calibri nor Arial
+installed.
+
+Nothing has to be installed for the fonts excelipy carries the widths of:
+
+| Family | Regular | Bold |
+| --- | --- | --- |
+| Calibri (the default) | ✅ | ✅ |
+| Cambria | ✅ | ✅ |
+| Arial | ✅ | ✅ |
+| Times New Roman | ✅ | ✅ |
+| Courier New | ✅ | ✅ |
+
+These are the advance widths and kerning pairs of the fonts themselves, so a
+report generated in Airflow comes out laid out exactly as the same code lays it
+out on a workstation - every column width and row height identical. A font that
+*is* installed is measured from its own file instead, at the size and precision
+the carried widths were read at, so the two paths agree to the pixel.
+
+Any other family - Verdana, Segoe UI, Consolas - is measured from its file if
+it is there and from a stand-in if it is not, and a stand-in is roughly a
+seventh wider than Calibri, which shows up as columns wider than they need to
+be and wrapped text given lines Excel does not draw. Fonts are looked for by
+file name and, on Linux, through `fontconfig`, so installing the font or its
+metric-compatible substitute is enough:
+
+```dockerfile
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    fonts-crosextra-carlito fonts-crosextra-caladea fonts-liberation \
+ && rm -rf /var/lib/apt/lists/*
+```
+
+Falling back to a stand-in logs a warning rather than failing, and
+`ep.font_measurement` reports how a family is being measured - `installed`,
+`carried`, or `stand-in`. Only the last is a problem, and it is worth asserting
+on wherever reports are generated unattended:
+
+```python
+assert ep.font_measurement("Verdana") != "stand-in"
+assert ep.font_measurement("Verdana", bold=True) != "stand-in"
+```
+
+To see what a machine with no fonts of its own writes - to reproduce a
+container's output on a workstation, say - set `EXCELIPY_NO_SYSTEM_FONTS=1`,
+which ignores every font file that is installed:
+
+```bash
+EXCELIPY_NO_SYSTEM_FONTS=1 python report.py   # PowerShell: $env:EXCELIPY_NO_SYSTEM_FONTS=1
+```
+
+The carried widths are built by `tools/generate_font_metrics.py`, which reads
+them off the metric-compatible faces (Carlito, Caladea and Liberation, all SIL
+Open Font License 1.1) - run it to add a family.
+
 ## Usage
 
 ### Detailed Model Overview
