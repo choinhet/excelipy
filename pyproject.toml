@@ -1,6 +1,6 @@
 [project]
 name = "excelipy"
-version = "1.2.6"
+version = "1.3.0"
 description = "Wrapper around xlsxwriter to improve usability"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -26,13 +26,14 @@ dev = [
     "matplotlib>=3.9.4",
     "ruff>=0.15.12",
     "ty>=0.0.39",
+    "fonttools>=4.65.0",
 ]
 
 [tool.setuptools]
 packages = ["excelipy"]
 
 [tool.setuptools.package-data]
-excelipy = ["py.typed"]
+excelipy = ["py.typed", "resources/*"]
 
 [tool.pytest.ini_options]
 addopts = """

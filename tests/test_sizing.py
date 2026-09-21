@@ -19,13 +19,10 @@ from excelipy.writers.table import (
     _break_chunks,
     _excel_to_px,
     _font_candidates,
-    _kern_px,
     _line_px,
-    _load_font,
     _max_digit_px,
     _px_to_excel,
     count_lines,
-    get_char_size,
     get_row_height,
     get_text_px,
     get_text_size,
@@ -33,10 +30,14 @@ from excelipy.writers.table import (
 )
 
 
-def _installed(family: str) -> bool:
-    """Whether this font resolves to a real file rather than a stand-in."""
-    path = getattr(_load_font(family, DEFAULT_FONT_SIZE), "path", None)
-    return isinstance(path, str)
+def _measured_as_itself(family: str) -> bool:
+    """
+    Whether this font is measured in its own metrics rather than a stand-in's.
+
+    Installed or carried both count: the carried widths are the font's own, so
+    a test that needs a font to mean anything means as much either way.
+    """
+    return ep.font_measurement(family) != "stand-in"
 
 
 @contextlib.contextmanager
@@ -47,16 +48,13 @@ def no_system_fonts():
     The same switch reproduces a Linux report on a workstation, which is the
     only way to see what a server writes without being on one.
     """
-    caches = (_load_font, get_char_size, _kern_px, _line_px)
     os.environ[NO_SYSTEM_FONTS_ENV] = "1"
-    for cache in caches:
-        cache.cache_clear()
+    ep.clear_font_caches()
     try:
         yield
     finally:
         os.environ.pop(NO_SYSTEM_FONTS_ENV, None)
-        for cache in caches:
-            cache.cache_clear()
+        ep.clear_font_caches()
 
 
 def lines(heights: dict[int, float], row: int, font_size: int | None = None) -> int:
@@ -206,8 +204,7 @@ def test_the_column_unit_is_the_width_excel_draws_a_digit():
         assert ep.font_path("Calibri") is None, "the stand-in has to be in play"
         assert _max_digit_px() == 7, "the unit moved with the fonts installed here"
         assert _excel_to_px(20) == 135
-    if _installed("Calibri"):
-        assert 7 <= get_text_px("0") < 8
+    assert 7 <= get_text_px("0") < 8
 
 
 def test_wrapping_a_cell_costs_one_pass_over_its_text():
@@ -267,7 +264,7 @@ def test_a_font_that_is_not_installed_falls_back_to_a_stand_in():
     font's text in a row sized for a small one.
     """
     missing = "No Such Font Is Installed"
-    assert not _installed(missing)
+    assert not _measured_as_itself(missing)
     small = get_text_px("some text", 8, missing)
     large = get_text_px("some text", 24, missing)
     assert 0 < small < large
@@ -276,8 +273,7 @@ def test_a_font_that_is_not_installed_falls_back_to_a_stand_in():
 def test_three_fonts_in_one_column_wrap_three_different_ways():
     """Each is measured in its own metrics, so each takes its own line count."""
     families = ("Times New Roman", "Calibri", "Courier New")
-    if not all(_installed(family) for family in families):
-        pytest.skip("needs all three fonts installed to mean anything")
+    assert all(_measured_as_itself(family) for family in families)
 
     text = "the font decides where this wraps"
     room = _excel_to_px(15)
@@ -293,8 +289,7 @@ def test_text_is_measured_in_the_cell_font_not_the_default_one():
     A column is a fixed width in pixels, set by the workbook's default font.
     Text in a wider font therefore wraps in a column the default font fits.
     """
-    if not (_installed("Arial") and _installed("Calibri")):
-        pytest.skip("needs both fonts installed to mean anything")
+    assert _measured_as_itself("Arial") and _measured_as_itself("Calibri")
     text = "wrapping depends on the font"
 
     # Exactly the room Calibri needs, with none of auto width's breathing room
