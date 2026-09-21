@@ -1,5 +1,7 @@
+import contextlib
 import io
 import math
+import os
 import random
 import string
 
@@ -12,15 +14,18 @@ from excelipy.writers.table import (
     DEFAULT_FONT_SIZE,
     DEFAULT_LINE_SPACING,
     FIT_TOLERANCE_PX,
+    NO_SYSTEM_FONTS_ENV,
     PADDING_DEFAULT,
     _break_chunks,
     _excel_to_px,
     _font_candidates,
+    _kern_px,
     _line_px,
     _load_font,
     _max_digit_px,
     _px_to_excel,
     count_lines,
+    get_char_size,
     get_row_height,
     get_text_px,
     get_text_size,
@@ -32,6 +37,26 @@ def _installed(family: str) -> bool:
     """Whether this font resolves to a real file rather than a stand-in."""
     path = getattr(_load_font(family, DEFAULT_FONT_SIZE), "path", None)
     return isinstance(path, str)
+
+
+@contextlib.contextmanager
+def no_system_fonts():
+    """
+    Measure as a machine with no fonts of its own does - a bare container.
+
+    The same switch reproduces a Linux report on a workstation, which is the
+    only way to see what a server writes without being on one.
+    """
+    caches = (_load_font, get_char_size, _kern_px, _line_px)
+    os.environ[NO_SYSTEM_FONTS_ENV] = "1"
+    for cache in caches:
+        cache.cache_clear()
+    try:
+        yield
+    finally:
+        os.environ.pop(NO_SYSTEM_FONTS_ENV, None)
+        for cache in caches:
+            cache.cache_clear()
 
 
 def lines(heights: dict[int, float], row: int, font_size: int | None = None) -> int:
@@ -167,16 +192,22 @@ def test_bigger_fonts_need_more_lines_in_the_same_column():
 def test_the_column_unit_is_the_width_excel_draws_a_digit():
     """
     Excel's unit for Calibri 11 is 7 pixels, and columns are sized and read
-    back through it. A digit measures anywhere from 7.4 to 7.9 depending on
-    the font file, and every one of those has to come to 7 - rounding one up
-    gives every column a seventh more room than Excel gives it.
+    back through it. It has to be 7 on every machine, whatever fonts that
+    machine has: the unit belongs to the workbook, and a box measuring its own
+    stand-in at 8.5 gives every column a seventh more room than Excel does -
+    which is the line of wrapped text a server-generated report comes out
+    clipping. This used to skip itself on exactly the machines that got it
+    wrong.
     """
-    if not _installed("Calibri"):
-        pytest.skip("needs Calibri installed to mean anything")
-    assert 7 <= get_text_px("0") < 8
     assert _max_digit_px() == 7
     # Excel's own conversion, for a column of 20 units
     assert _excel_to_px(20) == 135
+    with no_system_fonts():
+        assert ep.font_path("Calibri") is None, "the stand-in has to be in play"
+        assert _max_digit_px() == 7, "the unit moved with the fonts installed here"
+        assert _excel_to_px(20) == 135
+    if _installed("Calibri"):
+        assert 7 <= get_text_px("0") < 8
 
 
 def test_wrapping_a_cell_costs_one_pass_over_its_text():

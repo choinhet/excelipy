@@ -1,7 +1,11 @@
 import datetime
 import logging
 import math
+import os
+import shutil
+import subprocess
 from collections import defaultdict
+from collections.abc import Iterator
 from functools import lru_cache
 from typing import Any, NamedTuple, cast
 
@@ -41,6 +45,16 @@ MEASURE_SCALE = 10
 # header that carries one.
 EXCEL_PADDING_PX = 5
 FILTER_BUTTON_PX = 16
+
+# What that digit is worth, in whole pixels, for the fonts a workbook defaults
+# to. The unit belongs to the file rather than to the machine writing it: Excel
+# draws a Calibri 11 digit 7 pixels wide, and 7 is the constant xlsxwriter
+# itself converts every column width through, wherever it runs.
+EXCEL_DIGIT_PX = {("calibri", 11): 7, ("arial", 10): 7}
+
+# Set to reproduce a machine with no fonts of its own - every family falls
+# through to the stand-in, as it does in a bare container.
+NO_SYSTEM_FONTS_ENV = "EXCELIPY_NO_SYSTEM_FONTS"
 
 # Excel lays text out on whole pixels, so a line that overruns by less than one
 # is drawn, not wrapped.
@@ -91,6 +105,22 @@ FONT_FILE_ALIASES = {
     "trebuchet ms": ("trebuc.ttf",),
 }
 
+# Families that measure the same as one of the Microsoft fonts by design. A
+# Linux box carries these in place of the font itself, and fontconfig answers
+# for the font with one of them - but it answers with something whatever it
+# has, so what it says has to be checked against this.
+METRIC_SUBSTITUTES = {
+    "arial": ("liberation sans", "arimo"),
+    "calibri": ("carlito",),
+    "cambria": ("caladea",),
+    "courier new": ("liberation mono", "cousine"),
+    "georgia": ("gelasio",),
+    "times new roman": ("liberation serif", "tinos"),
+}
+
+# Families already reported as missing, so a sheet of them logs one line each
+_substituted: set[str] = set()
+
 
 def _font_candidates(font_family: str) -> tuple[str, ...]:
     """
@@ -111,18 +141,108 @@ def _font_candidates(font_family: str) -> tuple[str, ...]:
     return tuple(seen)
 
 
+def _system_fonts_disabled() -> bool:
+    """
+    Whether :data:`NO_SYSTEM_FONTS_ENV` asks for the fonts here to be ignored.
+
+    Examples:
+        >>> previous = os.environ.pop(NO_SYSTEM_FONTS_ENV, None)
+        >>> _system_fonts_disabled()
+        False
+        >>> os.environ[NO_SYSTEM_FONTS_ENV] = "1"
+        >>> _system_fonts_disabled()
+        True
+        >>> os.environ[NO_SYSTEM_FONTS_ENV] = previous or ""
+    """
+    return os.environ.get(NO_SYSTEM_FONTS_ENV, "").strip().lower() not in (
+        "",
+        "0",
+        "false",
+        "no",
+    )
+
+
+@lru_cache
+def _fc_match(font_family: str) -> str | None:
+    """
+    The file fontconfig has for ``font_family``, when it really is that font.
+
+    fontconfig knows a font whatever its file is called, and its own rules map
+    a Microsoft font onto the metric-compatible substitute installed in its
+    place. It answers with something regardless, though - a missing Calibri
+    comes back as DejaVu Sans, which measures nothing like it - so the family
+    it matched has to be one we asked for.
+    """
+    if not shutil.which("fc-match"):
+        return None
+    try:
+        found = subprocess.run(
+            ["fc-match", "--format=%{file}|%{family}", font_family],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        ).stdout
+    except (OSError, subprocess.SubprocessError) as e:  # pragma: no cover
+        log.debug(f"Could not ask fontconfig for {font_family}.\nException: {e}")
+        return None
+    path, _, matched = found.partition("|")
+    wanted = {font_family.lower(), *METRIC_SUBSTITUTES.get(font_family.lower(), ())}
+    families = {name.strip().lower() for name in matched.split(",")}
+    return path if path and families & wanted else None
+
+
+def _font_files(font_family: str) -> Iterator[str]:
+    """
+    Files to try for ``font_family``, cheapest first.
+
+    The names it is usually installed under cost nothing to try, so fontconfig
+    - a process, and only there on Linux - is asked only once they all miss.
+    """
+    if _system_fonts_disabled():
+        return
+    yield from _font_candidates(font_family)
+    matched = _fc_match(font_family)
+    if matched:
+        yield matched
+
+
+def _warn_substituted(font_family: str) -> None:
+    """
+    Say once that a font is being measured as something else.
+
+    Nothing else reports it: sizing carries on against Pillow's stand-in, which
+    is a seventh wider than Calibri, so columns come out wider than they need
+    and wrapped text is given lines Excel does not draw. A workbook written on
+    a server is laid out for a font nobody opening it has, and this line in the
+    log is the only sign of it.
+    """
+    if font_family in _substituted:
+        return
+    _substituted.add(font_family)
+    substitutes = METRIC_SUBSTITUTES.get(font_family.lower())
+    instead = f" or {' / '.join(s.title() for s in substitutes)}" if substitutes else ""
+    log.warning(
+        f"Font {font_family!r} is not installed here, so its text is measured "
+        f"against a stand-in and column widths and row heights will not match "
+        f"what Excel draws. Install {font_family}{instead} where this runs - on "
+        f"Debian or Ubuntu, `apt-get install fonts-crosextra-carlito "
+        f"fonts-crosextra-caladea fonts-liberation`."
+    )
+
+
 @lru_cache
 def _load_font(
     font_family: str,
     font_size: int,
 ) -> ImageFont.ImageFont | ImageFont.FreeTypeFont:
     size_px = font_size * PX_PER_POINT * MEASURE_SCALE
-    for candidate in _font_candidates(font_family):
+    for candidate in _font_files(font_family):
         try:
             return ImageFont.truetype(candidate, size_px)
         except Exception as e:
             log.debug(f"Could not load font file {candidate}.\nException: {e}")
-    log.debug(f"Could not load custom font {font_family}, using default.")
+    _warn_substituted(font_family)
     try:
         # Sized, so metrics stay proportional to the font: the unsized default
         # font would measure every size like the default one.
@@ -140,19 +260,45 @@ def _max_digit_px() -> int:
     Excel's column arithmetic is done in pixels of a rendered digit. For the
     Calibri 11 this writes by default, that is the documented 7.
 
-    The fraction is dropped rather than rounded, because that is what a digit
-    renders to: Calibri 11 measures anywhere from 7.4 to 7.9 depending on the
-    font file and the machine, and Excel draws all of them 7 wide. Rounding
-    one of those up to 8 hands every column a seventh more room than it has,
-    and the text Excel wraps into it then fits.
+    It is looked up rather than measured, because it is a property of the file
+    and not of the machine writing it. Excel draws a Calibri 11 digit 7 pixels
+    wide wherever the workbook is opened, and xlsxwriter converts every width
+    it writes through that same 7. Measured instead, it comes out at 7 on a box
+    that has Calibri - which measures 7.4 to 7.9 and truncates - and at 8 on
+    one that does not, where Pillow's stand-in measures 8.5. That is a seventh
+    more room per column than Excel gives, so text Excel wraps is counted as
+    fitting and the row is left a line short of what gets drawn in it: the same
+    report is laid out correctly on a workstation and clipped on a server.
+
+    A default font nobody has a number for is still measured, and truncated for
+    the same reason: Excel draws a digit a whole number of pixels wide.
 
     Examples:
-        >>> _max_digit_px() >= 1
-        True
+        >>> _max_digit_px()
+        7
     """
+    known = EXCEL_DIGIT_PX.get((DEFAULT_FONT_FAMILY.lower(), DEFAULT_FONT_SIZE))
+    if known is not None:
+        return known
     return max(
         math.trunc(get_char_size("0", DEFAULT_FONT_SIZE, DEFAULT_FONT_FAMILY)), 1
     )
+
+
+def font_path(font_family: str, font_size: int | None = None) -> str | None:
+    """
+    The file a family is measured from, or ``None`` when a stand-in is used.
+
+    Worth asserting on wherever a report is generated unattended: a missing
+    font is not an error, it is a sheet laid out a little wrong.
+
+    Examples:
+        >>> font_path("No Such Font Is Installed") is None
+        True
+    """
+    font = _load_font(font_family, font_size or DEFAULT_FONT_SIZE)
+    path = getattr(font, "path", None)
+    return path if isinstance(path, str) else None
 
 
 def _column_px(size: float) -> float:

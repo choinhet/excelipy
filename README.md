@@ -66,6 +66,47 @@ ep.save(
 )
 ```
 
+### Fonts, and why a server can size a sheet differently
+
+Auto-size works by measuring text, so it needs the font the sheet is written
+in. Excel's own geometry is fixed - a column is a whole number of units, each
+worth 7 pixels for the Calibri 11 a workbook defaults to - and excelipy uses
+that constant wherever it runs, so a column is the same width in Excel however
+the machine that wrote it is set up.
+
+What the machine does decide is how wide the *text* measures. A font that is
+not installed is measured against a stand-in roughly a seventh wider than
+Calibri, so a report generated in a container comes out with wider columns and
+more wrapped lines than the same code on a workstation. Fonts are looked for by
+file name and, on Linux, through `fontconfig`, which knows the metric-compatible
+substitutes - so installing those is enough to get identical output:
+
+```dockerfile
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    fonts-crosextra-carlito fonts-crosextra-caladea fonts-liberation \
+ && rm -rf /var/lib/apt/lists/*
+```
+
+(`Carlito` stands in for Calibri, `Caladea` for Cambria, and the `Liberation`
+family for Arial, Times New Roman and Courier New - each is metrically
+identical to the font it replaces.)
+
+A missing font logs a warning rather than failing, and `ep.font_path` reports
+what a family is measured from - `None` means a stand-in, which is worth
+asserting on wherever reports are generated unattended:
+
+```python
+assert ep.font_path("Calibri"), "install fonts-crosextra-carlito"
+```
+
+To see what a machine with no fonts writes - to reproduce a container's output
+on a workstation, say - set `EXCELIPY_NO_SYSTEM_FONTS=1`, which makes every
+family fall through to the stand-in:
+
+```bash
+EXCELIPY_NO_SYSTEM_FONTS=1 python report.py   # PowerShell: $env:EXCELIPY_NO_SYSTEM_FONTS=1
+```
+
 ## Usage
 
 ### Detailed Model Overview
